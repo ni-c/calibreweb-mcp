@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SOURCE FILE — the one place the architecture diagram is edited.
+
+  `npm run assets` turns this into four rendered copies, which are the files that
+  actually get shown:
+
+    docs/public/architecture-light.svg   GitHub in its light theme
+    docs/public/architecture-dark.svg    GitHub in its dark theme
+    docs/public/architecture.svg         npm, and anything that strips <picture>
+    docs/index.md                        inline, follows the VitePress theme toggle
+
+  Geometry and labels only: no colours, no <style>. Everything is expressed through
+  the class contract that docs/.vitepress/theme/custom.css defines — .node,
+  .node-accent, .edge, .edge-accent, .edge-dashed, .label-title, .label-mono,
+  .label-muted — and the generator supplies a matching palette per output.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" role="img" aria-labelledby="arch-title arch-desc">
+  <title id="arch-title">calibreweb-mcp architecture</title>
+  <desc id="arch-desc">An MCP client speaks stdio to calibreweb-mcp, which reads the OPDS feed of Calibre-Web over HTTPS with Basic auth; Calibre-Web serves the Calibre library.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" />
+    </marker>
+    <marker id="arrow-accent" class="accent" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" />
+    </marker>
+  </defs>
+
+  <rect class="node" x="14" y="62" width="164" height="80" rx="10" />
+  <text class="label-title" x="96" y="93" text-anchor="middle">MCP client</text>
+  <text class="label-muted" x="96" y="113" text-anchor="middle">Claude, Codex, Inspector</text>
+
+  <rect class="node-accent" x="248" y="62" width="180" height="80" rx="10" />
+  <text class="label-title" x="338" y="93" text-anchor="middle">calibreweb-mcp</text>
+  <text class="label-muted" x="338" y="113" text-anchor="middle">6 read-only tools</text>
+
+  <rect class="node" x="498" y="62" width="164" height="80" rx="10" />
+  <text class="label-title" x="580" y="93" text-anchor="middle">Calibre-Web</text>
+  <text class="label-muted" x="580" y="113" text-anchor="middle">/opds Atom feed</text>
+
+  <rect class="node" x="498" y="178" width="164" height="54" rx="10" />
+  <text class="label-title" x="580" y="203" text-anchor="middle">Calibre library</text>
+  <text class="label-muted" x="580" y="221" text-anchor="middle">books, covers, shelves</text>
+
+  <path class="edge-accent" d="M178,102 L242,102" marker-end="url(#arrow-accent)" />
+  <text class="label-mono" x="210" y="90" text-anchor="middle">stdio</text>
+
+  <path class="edge-accent" d="M428,102 L492,102" marker-end="url(#arrow-accent)" />
+  <text class="label-mono" x="460" y="90" text-anchor="middle">HTTPS</text>
+  <text class="label-muted" x="460" y="126" text-anchor="middle">Basic auth</text>
+
+  <path class="edge edge-dashed" d="M580,142 L580,172" marker-end="url(#arrow)" />
+
+<text class="label-muted" x="338" y="164" text-anchor="middle">hardened XML · bounded responses · GET only</text>
+</svg>

@@ -1,0 +1,8 @@
+{
+  "$comment": "Copy for docs/public/og.png, the GitHub social preview and the OpenGraph card. Rendered by scripts/gen-assets.mjs. Tagline and badges are split by hand because the renderer does not wrap text.",
+  "tagline": [
+    "Read-only MCP server for your Calibre-Web",
+    "library, via the OPDS feed"
+  ],
+  "badges": ["6 tools", "read-only", "MIT", "Node ≥22"]
+}
