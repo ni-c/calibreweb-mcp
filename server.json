@@ -1,0 +1,83 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ni-c/calibreweb-mcp",
+  "title": "Calibre-Web",
+  "description": "Read-only MCP server for Calibre-Web: library search, browsing and covers via the OPDS feed",
+  "websiteUrl": "https://calibreweb-mcp.ni-c.de",
+  "repository": {
+    "url": "https://github.com/ni-c/calibreweb-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "calibreweb-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CALIBRE_WEB_URL",
+          "description": "Root URL of the Calibre-Web instance, e.g. https://books.example.com",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_USERNAME",
+          "description": "Username of the Calibre-Web account (web login); leave unset together with the password for anonymous-browsing instances",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_PASSWORD",
+          "description": "Password of that account (web login password)",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_INSECURE_TLS",
+          "description": "Set to true to accept self-signed certificates (scoped to the configured host)",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/ni-c/calibreweb-mcp:0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CALIBRE_WEB_URL",
+          "description": "Root URL of the Calibre-Web instance, e.g. https://books.example.com",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_USERNAME",
+          "description": "Username of the Calibre-Web account (web login); leave unset together with the password for anonymous-browsing instances",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_PASSWORD",
+          "description": "Password of that account (web login password)",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CALIBRE_WEB_INSECURE_TLS",
+          "description": "Set to true to accept self-signed certificates (scoped to the configured host)",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
