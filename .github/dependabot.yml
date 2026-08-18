@@ -19,6 +19,12 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # typescript-eslint pins typescript <6.1.0 as a peer; TS 7 cannot install
+      # here. Re-check with `npm view typescript-eslint peerDependencies`.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
 
   # Exists so the digest-pinned base image gets refreshed at all. Node majors are
   # excluded because Dependabot offers whatever tag is newest, while the runtime
