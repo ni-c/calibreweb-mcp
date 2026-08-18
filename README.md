@@ -5,6 +5,7 @@
 [![node](https://img.shields.io/node/v/calibreweb-mcp)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/calibreweb-mcp)](LICENSE)
 [![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-2496ed?logo=docker&logoColor=white)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
+[![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-4f46e5)](https://calibreweb-mcp.ni-c.de)
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 [Calibre-Web](https://github.com/janeczku/calibre-web) (and
@@ -27,6 +28,13 @@ tool is a GET against the OPDS routes.
   <source media="(prefers-color-scheme: light)" srcset="https://calibreweb-mcp.ni-c.de/architecture-light.svg">
   <img src="https://calibreweb-mcp.ni-c.de/architecture.svg" alt="An MCP client speaks stdio to calibreweb-mcp, which reads the OPDS feed of Calibre-Web over HTTPS with Basic auth" width="800">
 </picture>
+
+<!-- Recorded with vhs from docs/demo.tape against the bundled fixture library
+     (docs/demo-server.mjs) — no Calibre-Web instance needed to reproduce it. -->
+
+![Demo: listing the tools, searching the library and reading the stats through the MCP Inspector CLI](https://calibreweb-mcp.ni-c.de/demo.gif)
+
+**📖 Full documentation: [calibreweb-mcp.ni-c.de](https://calibreweb-mcp.ni-c.de)**
 
 ## Requirements
 
