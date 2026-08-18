@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- #region changelog -->
 
+## [0.1.2] - 2026-08-19
+
+### Fixed
+
+- Tag stripping in summaries now runs to a fixpoint, so overlapping constructs
+  like `<<script>script>` can no longer reassemble into markup
+  (CodeQL `js/incomplete-multi-character-sanitization`). Defense-in-depth: the
+  output is plain text, but an MCP client rendering results as markdown could
+  have interpreted leftover HTML.
+
 ## [0.1.1] - 2026-08-19
 
 ### Added
@@ -29,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened XML pipeline: DOCTYPE/entity refusal, no entity processing, bounded
   response bodies, control-character stripping, credential redaction.
 
+[0.1.2]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.0
 

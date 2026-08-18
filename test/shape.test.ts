@@ -304,6 +304,15 @@ describe('htmlToText / decodeXmlText', () => {
     expect(text).toBe('Hello world');
   });
 
+  it('strips tags that reassemble across passes (CodeQL js/incomplete-multi-character-sanitization)', () => {
+    const { text } = htmlToText(
+      '<<script>script>alert(1)<</script>/script>x',
+      200
+    );
+    expect(text).not.toContain('<script');
+    expect(text).not.toContain('</script');
+  });
+
   it('refuses to decode control-character entities', () => {
     expect(decodeXmlText('a&#7;b&#x1b;c')).toBe('a b c');
   });

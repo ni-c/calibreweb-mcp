@@ -459,12 +459,24 @@ export function htmlToText(
   limit: number
 ): { text: string; truncated: boolean } {
   const slice = html.slice(0, limit * 12 + 4096);
-  const text = slice
+
+  // Tag removal runs to a fixpoint: a single pass would let overlapping
+  // constructs reassemble markup — `<<script>script>` becomes `<script>` after
+  // one round. The output is plain text for a model, but an MCP client
+  // rendering it as markdown could interpret leftover HTML, so no fragment may
+  // survive. Bounded, since each round strictly shortens the string.
+  let stripped = slice
     // Script and style bodies are markup, not description text.
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<br\s*\/?>/gi, '\n');
+  for (;;) {
+    const next = stripped.replace(/<[^>]+>/g, '');
+    if (next === stripped) break;
+    stripped = next;
+  }
+
+  const text = stripped
     .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, decodeEntity)
     // Raw unsafe characters present in the source markup, not just the numeric
     // entities handled in decodeEntity. Tab and newline survive, they are real
@@ -474,7 +486,6 @@ export function htmlToText(
     .replace(/\n[ \t]*/g, '\n')
     .replace(/\n\s*\n\s*\n+/g, '\n\n')
     .trim();
-
   if (text.length <= limit) {
     // Only genuinely complete when the slice covered the whole input.
     return { text, truncated: slice.length < html.length };
