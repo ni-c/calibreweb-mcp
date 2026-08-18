@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- #region changelog -->
 
-## [Unreleased]
+## [0.1.0] - 2026-08-19
 
 ### Added
 
@@ -18,6 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hardened XML pipeline: DOCTYPE/entity refusal, no entity processing, bounded
   response bodies, control-character stripping, credential redaction.
 
-<!-- #endregion changelog -->
+[0.1.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.0
 
-[Unreleased]: https://github.com/ni-c/calibreweb-mcp/commits/main
+<!-- #endregion changelog -->
