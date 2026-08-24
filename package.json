@@ -22,6 +22,7 @@
     "url": "https://github.com/ni-c/calibreweb-mcp/issues"
   },
   "homepage": "https://github.com/ni-c/calibreweb-mcp#readme",
+  "funding": "https://github.com/sponsors/ni-c",
   "type": "module",
   "bin": {
     "calibreweb-mcp": "dist/index.js"

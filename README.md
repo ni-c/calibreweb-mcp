@@ -6,6 +6,7 @@
 [![license](https://img.shields.io/npm/l/calibreweb-mcp)](LICENSE)
 [![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-2496ed?logo=docker&logoColor=white)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
 [![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-4f46e5)](https://calibreweb-mcp.ni-c.de)
+[![sponsor](https://img.shields.io/badge/sponsor-ni--c-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ni-c)
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 [Calibre-Web](https://github.com/janeczku/calibre-web) (and
