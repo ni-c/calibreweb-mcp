@@ -2,23 +2,25 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ni-c/calibreweb-mcp/ci.yml?branch=main&label=CI)](https://github.com/ni-c/calibreweb-mcp/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/calibreweb-mcp)](https://www.npmjs.com/package/calibreweb-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/calibreweb-mcp)](https://www.npmjs.com/package/calibreweb-mcp)
 [![node](https://img.shields.io/node/v/calibreweb-mcp)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/calibreweb-mcp)](LICENSE)
-[![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-2496ed?logo=docker&logoColor=white)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
-[![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-4f46e5)](https://calibreweb-mcp.ni-c.de)
+[![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-blue)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
+[![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-informational)](https://calibreweb-mcp.ni-c.de)
 [![sponsor](https://img.shields.io/badge/sponsor-ni--c-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ni-c)
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for
 [Calibre-Web](https://github.com/janeczku/calibre-web) (and
 [Calibre-Web Automated](https://github.com/crocodilestick/Calibre-Web-Automated)),
 the self-hosted ebook library web UI.
 
-Calibre-Web has no REST API — its only stable machine-readable interface is the
-OPDS catalog feed it serves for e-reader apps. This server speaks that feed:
-Atom XML with HTTP Basic auth in, structured book data out. Search the library,
-browse the curated views and shelves, follow per-format download links, and pull
-cover images straight into the conversation. It never writes anything: every
-tool is a GET against the OPDS routes.
+Lets MCP clients like Claude Code, Claude Desktop or Codex search your library,
+browse the curated views and shelves, follow per-format download links and pull cover
+images straight into the conversation. It never writes anything: every tool is a GET.
+
+Calibre-Web has no REST API — its only stable machine-readable interface is the OPDS
+catalog feed it serves for e-reader apps. This server speaks that feed: Atom XML with
+HTTP Basic auth in, structured book data out.
 
 <!-- <picture> is resolved against the colour scheme of the page showing it, so GitHub
      picks the variant that matches its own theme toggle. npm strips <picture> and
@@ -34,8 +36,6 @@ tool is a GET against the OPDS routes.
      (docs/demo-server.mjs) — no Calibre-Web instance needed to reproduce it. -->
 
 ![Demo: listing the tools, searching the library and reading the stats through the MCP Inspector CLI](https://calibreweb-mcp.ni-c.de/demo.gif)
-
-**📖 Full documentation: [calibreweb-mcp.ni-c.de](https://calibreweb-mcp.ni-c.de)**
 
 ## Requirements
 
