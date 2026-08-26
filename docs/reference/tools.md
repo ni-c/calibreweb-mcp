@@ -1,5 +1,10 @@
 # Tools
 
+All six are registered unless you say otherwise. `CALIBRE_WEB_ALLOW_TOOLS` and
+`CALIBRE_WEB_DENY_TOOLS` narrow the list to the ones you want, and `essential` selects a
+curated five — see
+[choosing the tools that load](/guide/configuration#choosing-the-tools-that-load).
+
 Six tools, all read-only (`readOnlyHint: true`). Every result that carries
 library data includes a `notes` array — budget truncations, dropped links and
 the untrusted-data marker all land there.
