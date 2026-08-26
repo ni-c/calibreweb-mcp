@@ -1,0 +1,196 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { Config } from '../src/config.js';
+import { createServer } from '../src/server.js';
+import { ToolFilterError } from '../src/tool-filter.js';
+import { ALL_TOOLS, ESSENTIAL_TOOLS } from '../src/tools/catalogue.js';
+
+const base: Config = {
+  url: 'https://books.example.com',
+  username: 'u',
+  password: 'p',
+  insecureTls: false,
+  allowTools: undefined,
+  denyTools: undefined,
+};
+
+function config(overrides: Partial<Config> = {}): Config {
+  return { ...base, ...overrides };
+}
+
+/** The tools a server built with this configuration actually offers. */
+async function toolNames(overrides: Partial<Config> = {}): Promise<string[]> {
+  vi.stubGlobal('fetch', vi.fn());
+  const server = createServer(config(overrides));
+  const client = new Client({ name: 'test-client', version: '0.0.0' });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+  const { tools } = await client.listTools();
+  return tools.map((t) => t.name).sort();
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe('the catalogue', () => {
+  // These are what let the filter validate a name before anything is
+  // registered. If they drift from the code, every error message drifts too.
+  it('is exactly the set of tools the server registers', async () => {
+    expect(await toolNames()).toEqual([...ALL_TOOLS].sort());
+  });
+
+  it('holds names the env-var syntax cannot misread', () => {
+    // A comma or an asterisk in a name would break the separator or the
+    // pattern; a tool called "essential" would be unreachable behind the preset.
+    for (const tool of ALL_TOOLS) {
+      expect(tool).toMatch(/^[a-z0-9_]+$/);
+    }
+    expect(ALL_TOOLS).not.toContain('essential');
+  });
+
+  it('has an essential preset that is a real, sensibly sized subset', () => {
+    expect(new Set(ESSENTIAL_TOOLS).size).toBe(ESSENTIAL_TOOLS.length);
+    expect(ESSENTIAL_TOOLS.length).toBeGreaterThanOrEqual(5);
+    expect(ESSENTIAL_TOOLS.length).toBeLessThanOrEqual(8);
+    for (const tool of ESSENTIAL_TOOLS) expect(ALL_TOOLS).toContain(tool);
+  });
+});
+
+describe('selecting tools', () => {
+  it('narrows tools/list to an allow list', async () => {
+    expect(
+      await toolNames({ allowTools: 'get_cover,get_shelf_books' })
+    ).toEqual(['get_cover', 'get_shelf_books'].sort());
+  });
+
+  it('removes a whole family with a prefix pattern', async () => {
+    const names = await toolNames({ denyTools: 'get_*' });
+    expect(names.some((n) => n.startsWith('get_'))).toBe(false);
+    expect(names).toHaveLength(
+      ALL_TOOLS.length - ALL_TOOLS.filter((t) => t.startsWith('get_')).length
+    );
+  });
+
+  it('subtracts the deny list from the allow list', async () => {
+    expect(
+      await toolNames({
+        allowTools: 'get_cover,get_shelf_books',
+        denyTools: 'get_shelf_books',
+      })
+    ).toEqual(['get_cover']);
+  });
+
+  it('selects the curated set for "essential"', async () => {
+    expect(await toolNames({ allowTools: 'essential' })).toEqual(
+      [...ESSENTIAL_TOOLS].sort()
+    );
+  });
+
+  it('lets the preset compose with extra names', async () => {
+    expect(await toolNames({ allowTools: 'essential,get_cover' })).toEqual(
+      [...ESSENTIAL_TOOLS, 'get_cover'].sort()
+    );
+  });
+
+  it('trims entries, ignores case and skips empty ones', async () => {
+    expect(
+      await toolNames({ allowTools: ' GET_COVER ,, get_shelf_books, ' })
+    ).toEqual(['get_cover', 'get_shelf_books'].sort());
+  });
+
+  it('treats an empty value as no filter at all', async () => {
+    // `ALLOW_TOOLS=` in a compose file must not mean "allow nothing".
+    expect(await toolNames({ allowTools: '   ' })).toEqual(
+      [...ALL_TOOLS].sort()
+    );
+  });
+
+  it('leaves an unconfigured server untouched', async () => {
+    expect(await toolNames()).toEqual([...ALL_TOOLS].sort());
+  });
+});
+
+describe('a filtered-out tool', () => {
+  it('cannot be called either, not merely hidden', async () => {
+    // This is the difference between removing the tool and disabling it: a
+    // disabled tool still answers a call, which advertises a refusal.
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        calls.push(String(url));
+        return new Response('{}', {
+          headers: { 'content-type': 'application/json' },
+        });
+      })
+    );
+    const server = createServer(config({ allowTools: 'get_cover' }));
+    const client = new Client({ name: 'test-client', version: '0.0.0' });
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+
+    const result = (await client.callTool({
+      name: 'get_shelf_books',
+      arguments: {},
+    })) as CallToolResult;
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain(
+      'Tool get_shelf_books not found'
+    );
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('refusing an unusable list', () => {
+  it('rejects a name no tool has, and says which names exist', () => {
+    // A typo that was merely ignored would leave a tool missing with no trace
+    // of why — nobody looks for the cause of an absence in an env var.
+    expect(() => createServer(config({ allowTools: 'get_covez' }))).toThrow(
+      ToolFilterError
+    );
+    expect(() => createServer(config({ allowTools: 'get_covez' }))).toThrow(
+      /no tool matches "get_covez".*get_cover/s
+    );
+  });
+
+  it('rejects a pattern that matches nothing', () => {
+    expect(() => createServer(config({ allowTools: 'zzz_*' }))).toThrow(
+      /no tool matches "zzz_\*"/
+    );
+  });
+
+  it('rejects a pattern with the star anywhere but last', () => {
+    expect(() => createServer(config({ allowTools: '*_x' }))).toThrow(
+      /single trailing "\*"/
+    );
+    expect(() => createServer(config({ allowTools: 'get_*_x' }))).toThrow(
+      /single trailing "\*"/
+    );
+  });
+
+  it('applies the same rule to the deny list', () => {
+    expect(() => createServer(config({ denyTools: 'get_covez' }))).toThrow(
+      /_DENY_TOOLS: no tool matches "get_covez"/
+    );
+  });
+
+  it('rejects a list that would leave no tools at all', () => {
+    expect(() => createServer(config({ denyTools: '*' }))).toThrow(
+      /empty tool list/
+    );
+  });
+});

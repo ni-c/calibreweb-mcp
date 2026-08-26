@@ -19,6 +19,8 @@ features:
     details: Calibre-Web exposes no REST API — its only stable machine interface is the OPDS Atom feed built for e-reader apps. These tools parse that feed into structured book data with numeric ids, per-format download URLs and bounded summaries.
   - title: Runs anywhere stdio does
     details: A single npx command, a Claude Desktop JSON block, a Codex TOML entry, or a multi-arch container image with an SBOM and build provenance.
+  - title: Six tools, or fewer
+    details: 'CALIBRE_WEB_ALLOW_TOOLS cuts finer — essential for a curated five, your own comma-separated list, or a whole family with list_* — and CALIBRE_WEB_DENY_TOOLS subtracts. Whatever is filtered out does not exist on the protocol rather than failing when called, and a name that matches no tool stops the server at startup instead of quietly going missing.'
   - title: Read-only by construction
     details: Six tools, all GET. Redirects are refused so Basic credentials never travel, XML with a DOCTYPE is rejected outright, hrefs are locked to the configured origin, and metadata is marked as the untrusted data it is.
 ---

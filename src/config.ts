@@ -12,7 +12,15 @@ export interface Config {
   username: string | undefined;
   /** The normal web-login password of the Calibre-Web user (OPDS uses HTTP Basic auth). */
   password: string | undefined;
-  insecureTls: boolean;
+  insecureTls: boolean; /**
+   * Raw value of `CALIBRE_WEB_ALLOW_TOOLS` — comma-separated tool names, `list_*`
+   * prefixes, or `essential`. Kept unparsed on purpose: this file is a mirror of
+   * the environment, and the names can only be checked against the tool
+   * catalogue, which `buildToolFilter` does.
+   */
+  allowTools: string | undefined;
+  /** Raw value of `CALIBRE_WEB_DENY_TOOLS`, same shape, subtracted from the above. */
+  denyTools: string | undefined;
 }
 
 /** Shown when the configuration is incomplete — at startup and on every API call. */
@@ -59,6 +67,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const username = env.CALIBRE_WEB_USERNAME;
   const password = env.CALIBRE_WEB_PASSWORD;
   const insecureTls = env.CALIBRE_WEB_INSECURE_TLS === 'true';
+  const allowTools = env.CALIBRE_WEB_ALLOW_TOOLS;
+  const denyTools = env.CALIBRE_WEB_DENY_TOOLS;
 
   // Don't keep the password in process.env for the process lifetime: it would be
   // inherited by child processes and show up in env dumps. (The kernel's
@@ -71,7 +81,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     console.error(
       `calibreweb-mcp: ${missingConfigMessage(['CALIBRE_WEB_URL'])}`
     );
-    return { url: undefined, username, password, insecureTls };
+    return {
+      url: undefined,
+      username,
+      password,
+      insecureTls,
+      allowTools,
+      denyTools,
+    };
   }
   if (!username !== !password) {
     console.error(
@@ -119,6 +136,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     username,
     password,
     insecureTls,
+    allowTools,
+    denyTools,
   };
 }
 

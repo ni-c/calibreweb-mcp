@@ -25,3 +25,22 @@ instructions instead of reaching any host.
   network unencrypted), or only one of the two credential variables set.
 - `CALIBRE_WEB_PASSWORD` is deleted from `process.env` immediately after being
   read.
+
+## Narrowing the tool list
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `CALIBRE_WEB_ALLOW_TOOLS` | no | Tool names, `list_*` prefixes or `essential`; only these register |
+| `CALIBRE_WEB_DENY_TOOLS` | no | Same syntax; subtracted from whatever the allow list left |
+
+Both are comma-separated. Each entry is either an exact tool name or a prefix with
+a single trailing `*`. Entries are trimmed and matched case-insensitively; empty
+entries are ignored, and a value that is empty or only whitespace counts as unset —
+`CALIBRE_WEB_ALLOW_TOOLS=` in a compose file does not mean "allow nothing".
+`essential` is recognised only in the allow list, and selects `search_books`, `list_books`, `list_shelves`, `get_shelf_books`, `get_stats`.
+
+**An entry that matches no tool aborts startup**, naming the entry and listing the
+valid names, as does a malformed pattern such as `*_x` or `list_*_x`. The
+alternative — ignoring the entry — leaves a tool missing from `tools/list` with
+nothing pointing at the cause. If both lists together remove everything, the server
+refuses to start rather than offering an empty tool list.

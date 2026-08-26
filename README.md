@@ -18,6 +18,11 @@ Lets MCP clients like Claude Code, Claude Desktop or Codex search your library,
 browse the curated views and shelves, follow per-format download links and pull cover
 images straight into the conversation. It never writes anything: every tool is a GET.
 
+Six tools is the ceiling, not the floor: `CALIBRE_WEB_ALLOW_TOOLS=essential`
+registers a curated five instead, and a model picks the right tool far more
+reliably from five than from six — see
+[choosing which tools load](#choosing-which-tools-load).
+
 Calibre-Web has no REST API — its only stable machine-readable interface is the OPDS
 catalog feed it serves for e-reader apps. This server speaks that feed: Atom XML with
 HTTP Basic auth in, structured book data out.
@@ -55,6 +60,8 @@ HTTP Basic auth in, structured book data out.
 | `CALIBRE_WEB_USERNAME`     | yes¹     | Username of the Calibre-Web account.                                                                    |
 | `CALIBRE_WEB_PASSWORD`     | yes¹     | Password of that account (the web login password).                                                      |
 | `CALIBRE_WEB_INSECURE_TLS` | no       | `true` to accept self-signed certificates — scoped to the configured host only.                         |
+| `CALIBRE_WEB_ALLOW_TOOLS`  | no       | Comma-separated tool names, `list_*` prefixes, or `essential` for a curated preset                      |
+| `CALIBRE_WEB_DENY_TOOLS`   | no       | Same syntax; removed from whatever `CALIBRE_WEB_ALLOW_TOOLS` left                                       |
 
 ¹ Leave **both** unset for an instance that allows anonymous browsing; setting
 only one of them is a configuration error.
@@ -174,3 +181,24 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE)
+
+### Choosing which tools load
+
+`CALIBRE_WEB_ALLOW_TOOLS` and `CALIBRE_WEB_DENY_TOOLS` take comma-separated tool names;
+a trailing `*` matches a whole family. `essential` is a curated preset of
+five: `search_books`, `list_books`, `list_shelves`, `get_shelf_books`, `get_stats`.
+
+```sh
+CALIBRE_WEB_ALLOW_TOOLS=essential
+CALIBRE_WEB_ALLOW_TOOLS=search_books,list_shelves
+CALIBRE_WEB_DENY_TOOLS=get_cover
+```
+
+An entry that matches no tool aborts startup and names it, so a typo cannot
+silently hide a tool — an absent tool is not something anyone traces back to an
+environment variable. A filtered tool is never registered, so it is absent from
+`tools/list` and unknown to `tools/call` alike.
+
+If you run several of these servers at once, [mcp-hub](https://mcp-hub.ni-c.de)
+is the other answer — its `/hub` endpoint replaces every server's tools with six
+meta-tools.
