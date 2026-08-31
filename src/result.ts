@@ -67,7 +67,10 @@ const UNSAFE_CHARS =
  */
 function sanitizeErrorBody(body: string): string {
   const trimmed = body.replace(UNSAFE_CHARS, '').trim();
-  if (/^(<!doctype\s|<html[\s>])/i.test(trimmed)) {
+  // Anything markup-shaped: a reverse proxy's error page or a WAF block page.
+  // The check is deliberately loose — an XML declaration, a leading comment or
+  // a doctype followed by a newline are all the same thing here.
+  if (/^(<!doctype|<html[\s>]|<\?xml|<!--)/i.test(trimmed)) {
     return '(HTML error page omitted)';
   }
   if (trimmed.length > MAX_ERROR_BODY_LENGTH) {
