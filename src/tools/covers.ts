@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
 import { errorResult, run } from '../result.js';
@@ -30,7 +29,7 @@ export function registerCoverTools(
         'from the other tools (books with id null have no cover). Calibre-Web ' +
         'serves the full-size cover; images over 1 MB are refused to protect ' +
         'the context window — use the coverUrl from the book entry instead.',
-      inputSchema: {
+      inputSchema: z.object({
         book_id: z
           .number()
           .int()
@@ -39,7 +38,7 @@ export function registerCoverTools(
           .describe(
             'Numeric book id from search_books, list_books or get_shelf_books'
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ book_id }) =>

@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
 import { jsonResult, run } from '../result.js';
@@ -19,7 +18,7 @@ export function registerShelfTools(
         'plus the user’s own private ones. Use the returned id with ' +
         'get_shelf_books. isPublic is only reported on English-locale instances ' +
         '(Calibre-Web marks public shelves with a localized title suffix).',
-      inputSchema: {
+      inputSchema: z.object({
         offset: z
           .number()
           .int()
@@ -28,7 +27,7 @@ export function registerShelfTools(
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ offset }) =>
@@ -55,7 +54,7 @@ export function registerShelfTools(
         'Lists the books on a shelf, in the shelf’s own order. Shelf ids ' +
         'come from list_shelves. Book entries include per-format download URLs ' +
         'and a cover URL; fetch the cover image itself with get_cover.',
-      inputSchema: {
+      inputSchema: z.object({
         shelf_id: z
           .number()
           .int()
@@ -70,7 +69,7 @@ export function registerShelfTools(
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ shelf_id, offset }) =>

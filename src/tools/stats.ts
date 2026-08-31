@@ -1,4 +1,5 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
+import { z } from 'zod';
 
 import type { CalibreWebApi } from '../api.js';
 import { jsonResult, run } from '../result.js';
@@ -14,7 +15,7 @@ export function registerStatsTools(
       description:
         'Returns the total number of books, authors, categories (tags) and ' +
         'series in the library.',
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () =>

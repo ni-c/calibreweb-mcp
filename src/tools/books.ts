@@ -1,6 +1,5 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
 import { jsonResult, run, ToolInputError } from '../result.js';
@@ -29,7 +28,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
         'on a large library are truncated client-side — totalFound reports the ' +
         'real match count. Book entries include per-format download URLs and a ' +
         'cover URL; fetch the cover image itself with get_cover.',
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).max(500).describe('Search term'),
         limit: z
           .number()
@@ -40,7 +39,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .describe(
             `Maximum number of books to return (default ${SEARCH_DEFAULT_LIMIT}, max ${SEARCH_MAX_LIMIT})`
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ query, limit }) =>
@@ -76,7 +75,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
         'a letter). Page size is a server-side setting; pass the returned ' +
         'pagination.nextOffset as offset to fetch the next page. The discover ' +
         'view is random and not paginated.',
-      inputSchema: {
+      inputSchema: z.object({
         view: z
           .enum(['new', 'hot', 'rated', 'discover', 'read', 'unread', 'all'])
           .optional()
@@ -95,7 +94,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ view, letter, offset }) =>
