@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { errorResult, run } from '../result.js';
 
 /**
@@ -39,7 +40,7 @@ export function registerCoverTools(
             'Numeric book id from search_books, list_books or get_shelf_books'
           ),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async ({ book_id }) =>
       run(async () => {

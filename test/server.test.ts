@@ -47,6 +47,29 @@ describe('tool registration', () => {
     }
   });
 
+  it('declares all four annotation hints on every tool', async () => {
+    // Not a style rule. Two of the four default to a *stronger* claim than
+    // silence suggests: the specification gives destructiveHint and
+    // openWorldHint a default of true, so a tool that omits them announces
+    // itself as destructive and open-world. Leaving them out is a statement,
+    // not an abstention — so every tool states all four.
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const hints = [
+      'readOnlyHint',
+      'destructiveHint',
+      'idempotentHint',
+      'openWorldHint',
+    ] as const;
+    for (const tool of tools) {
+      for (const hint of hints) {
+        expect(typeof tool.annotations?.[hint], `${tool.name}.${hint}`).toBe(
+          'boolean'
+        );
+      }
+    }
+  });
+
   it('lists tools without any configuration', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const client = await connect({

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { jsonResult, run, ToolInputError } from '../result.js';
 import { Notes, shapeFeed } from '../shape.js';
 
@@ -40,7 +41,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
             `Maximum number of books to return (default ${SEARCH_DEFAULT_LIMIT}, max ${SEARCH_MAX_LIMIT})`
           ),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async ({ query, limit }) =>
       run(async () => {
@@ -95,7 +96,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async ({ view, letter, offset }) =>
       run(async () => {

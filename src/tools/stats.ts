@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { jsonResult, run } from '../result.js';
 
 export function registerStatsTools(
@@ -16,7 +17,7 @@ export function registerStatsTools(
         'Returns the total number of books, authors, categories (tags) and ' +
         'series in the library.',
       inputSchema: z.object({}),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async () =>
       run(async () => {

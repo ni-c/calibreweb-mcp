@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { jsonResult, run } from '../result.js';
 import { Notes, shapeFeed } from '../shape.js';
 
@@ -28,7 +29,7 @@ export function registerShelfTools(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async ({ offset }) =>
       run(async () => {
@@ -70,7 +71,7 @@ export function registerShelfTools(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ_ONLY,
     },
     async ({ shelf_id, offset }) =>
       run(async () => {
