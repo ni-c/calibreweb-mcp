@@ -2,7 +2,7 @@
   "name": "calibreweb-mcp",
   "version": "0.2.0",
   "mcpName": "io.github.ni-c/calibreweb-mcp",
-  "description": "MCP server for Calibre-Web — read-only library access via the OPDS feed",
+  "description": "MCP server for Calibre-Web \u2014 read-only library access via the OPDS feed",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -41,6 +41,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "prepublishOnly": "npm run lint && npm test && npm run build",
     "assets": "svg-asset-set",
     "assets:check": "svg-asset-set --check"
@@ -57,6 +58,7 @@
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "4.1.11",
+    "mcp-integration-harness": "^0.1.0",
     "oxlint": "^1.80.0",
     "prettier": "^3.9.6",
     "svg-asset-set": "https://github.com/ni-c/svg-asset-set/releases/download/v0.1.0/svg-asset-set-0.1.0.tgz",

@@ -1,0 +1,32 @@
+# Throwaway Calibre-Web for `npm run test:integration`.
+#
+# Not a managed stack: brought up over the committed library fixture, driven by
+# the suite, destroyed afterwards. This server is read-only — it speaks OPDS and
+# has no write tools at all — so nothing here can be damaged; the throwaway
+# instance exists because a Calibre-Web needs a Calibre library and there is no
+# sensible way to point one at somebody's real shelf.
+#
+# Bound to 127.0.0.1 only.
+services:
+  calibre-web:
+    # Overridable so the weekly CI run can point at :latest and report drift
+    # without changing what the PR gate tests.
+    image: ${CALIBRE_WEB_IMAGE:-lscr.io/linuxserver/calibre-web:0.6.24}
+    environment:
+      PUID: '1000'
+      PGID: '1000'
+      TZ: Etc/UTC
+    volumes:
+      # The library is a **fixture in the repository**, not something the
+      # bootstrap builds: a Calibre library cannot create itself, and the
+      # schema in `metadata.db` carries triggers that call Calibre's own
+      # `title_sort` and `uuid4` SQL functions. Generating one at run time
+      # would mean reimplementing those. Three books, ~450 kB, read-only.
+      - ./library:/books:ro
+      # Calibre-Web's own configuration database, which it creates on first
+      # start. tmpfs, so every run begins at the setup wizard.
+      - config:/config
+    ports:
+      - '127.0.0.1:8083:8083'
+volumes:
+  config:

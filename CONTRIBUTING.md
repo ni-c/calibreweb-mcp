@@ -11,13 +11,47 @@ npm test          # unit tests against a stubbed Calibre-Web OPDS feed, no insta
 npm run build
 ```
 
-A minimal dev environment:
+## Running the integration suite
+
+The unit tests stub the OPDS feed, so the documents they parse are documents
+this repository wrote — they agree with its own reading of the format by
+construction. This server's whole job is parsing XML somebody else produced, so
+the integration suite spawns the built server over stdio against a throwaway
+Calibre-Web in Docker and calls **every tool in the catalogue** against Atom
+that Calibre-Web generated.
 
 ```sh
-export CALIBRE_WEB_URL=http://127.0.0.1:8083
-export CALIBRE_WEB_USERNAME=admin
-export CALIBRE_WEB_PASSWORD=admin123
-node dist/index.js   # speaks MCP on stdio
+npm run build     # the suite runs dist/index.js, not src/
+docker compose -f test/integration/compose.yml up -d
+npm run test:integration
+docker compose -f test/integration/compose.yml down -v
+```
+
+`down -v` matters: Calibre-Web keeps its own configuration in a volume and the
+bootstrap runs its first-start wizard, which is only offered once.
+
+Three things worth knowing before changing any of this:
+
+- **The library is a fixture in the repository**, at `test/integration/library`
+  — three books, about 450 kB, mounted read-only. A Calibre library cannot
+  create itself: the schema in `metadata.db` carries triggers that call
+  Calibre's own `title_sort` and `uuid4` SQL functions, so building one at run
+  time would mean reimplementing them.
+- **Calibre-Web has no API for its own setup.** The first run redirects
+  everything to `/admin/dbconfig`, which is a browser form behind a login, so
+  `bootstrap.ts` does what a browser would: log in, read the CSRF token out of
+  the page, post the library path back.
+- **`/shelf/add/{shelf}/{book}` wants the CSRF token in an `X-CSRFToken`
+  header**, not as a form field, and answers 400 without it — which reads like
+  a bad book id. Two conventions in one application.
+
+For poking at one tool by hand, the inspector against the same stack:
+
+```sh
+docker compose -f test/integration/compose.yml up -d
+CALIBRE_WEB_URL=http://127.0.0.1:8083 CALIBRE_WEB_USERNAME=admin \
+  CALIBRE_WEB_PASSWORD=admin123 \
+  npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
 ## Expectations
