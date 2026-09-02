@@ -14,38 +14,84 @@ export function textResult(text: string): CallToolResult {
 const MAX_RESULT_BYTES = 400_000;
 
 /**
- * Serializes a result, stripping book summaries if the payload is still
- * pathologically large after the per-tool truncation.
+ * An answer in both channels at once, with book summaries stripped if the
+ * payload is still pathologically large after the per-tool truncation.
  *
  * A Calibre library can hold book descriptions of arbitrary length, and the
  * OPDS search endpoint returns every match in one feed. Everything downstream
  * of this function assumes the budget held; this is what guarantees it.
+ *
+ * `structuredContent` is the machine-readable half and the reason every tool
+ * here declares an `outputSchema`; the text block stays because the SDK does
+ * NOT synthesize one for an object-shaped value, and a client that reads only
+ * `content` would otherwise get an empty answer. Both carry the same object —
+ * which is why the over-budget path rebuilds the *value* rather than editing
+ * its serialization.
  */
-export function jsonResult(data: unknown): CallToolResult {
-  const text = JSON.stringify(data, null, 2);
-  if (text.length <= MAX_RESULT_BYTES) return textResult(text);
+export function jsonResult(data: Record<string, unknown>): CallToolResult {
+  if (JSON.stringify(data).length <= MAX_RESULT_BYTES) {
+    return structuredResult(data);
+  }
 
-  const stripped = JSON.stringify(
-    data,
-    (key, value: unknown) =>
+  const stripped = JSON.parse(
+    JSON.stringify(data, (key, value: unknown) =>
       key === 'summary' && typeof value === 'string'
         ? '(omitted: result too large)'
-        : value,
-    2
-  );
-  const note = `\n\nNote: the result exceeded ${MAX_RESULT_BYTES} characters, so book summaries were dropped. Narrow the request to get them back.`;
-  if (stripped.length <= MAX_RESULT_BYTES) return textResult(stripped + note);
+        : value
+    )
+  ) as Record<string, unknown>;
+  if (JSON.stringify(stripped).length <= MAX_RESULT_BYTES) {
+    return structuredResult({
+      ...stripped,
+      notes: [
+        ...(Array.isArray(stripped.notes) ? stripped.notes : []),
+        `The result exceeded ${MAX_RESULT_BYTES} characters, so book summaries were dropped. Narrow the request to get them back.`,
+      ],
+    });
+  }
 
-  // Dropping summaries is not always enough: the bulk can sit in fields this
+  // Dropping summaries is not always enough: the bulk can sit in fields the
   // replacer does not touch — a feed of thousands of books is all titles and
-  // URLs. Without this the "hard ceiling" would not be one, so the payload is
-  // cut off even though that leaves the JSON unparseable. Truncated JSON the
-  // model can see is still better than megabytes of context.
-  return textResult(
-    `${stripped.slice(0, MAX_RESULT_BYTES)}\n\n… (truncated: the result exceeded ` +
-      `${MAX_RESULT_BYTES} characters even without book summaries, so the JSON above ` +
-      'is incomplete. Narrow the request — use a more specific query or the offset parameter.)'
+  // URLs. This used to answer with the JSON cut at the ceiling, unparseable but
+  // visible. That is no longer an option: `structuredContent` has to parse, and
+  // the two channels have to carry the same value. So it is an error, which is
+  // the honest description of "there is no answer this size".
+  throw new ResultTooLargeError(
+    `The result exceeds ${MAX_RESULT_BYTES} characters even without book ` +
+      'summaries. Narrow the request — use a more specific query, a lower ' +
+      'limit, or the offset parameter.'
   );
+}
+
+/**
+ * {@link jsonResult}, with the untrusted-content marker on the object.
+ *
+ * The note has always gone out in `notes`, which is in the text block and in
+ * the structured half alike. The two fields are what a client reading only
+ * `structuredContent` can *check* rather than have to find in a list of
+ * sentences — and they are stripped from the payload before they are set, so
+ * the guard cannot be switched off by the content it guards against.
+ */
+export function untrustedResult(data: Record<string, unknown>): CallToolResult {
+  const { untrusted: _untrusted, source: _source, ...rest } = data;
+  return jsonResult({
+    untrusted: true as const,
+    source: 'calibre-web' as const,
+    ...rest,
+  });
+}
+
+/** Raised by {@link jsonResult}; `run` turns it into an error result. */
+export class ResultTooLargeError extends Error {}
+
+/** A value in both channels, with no budget applied. */
+export function structuredResult(
+  data: Record<string, unknown>
+): CallToolResult {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    structuredContent: data,
+  };
 }
 
 export function errorResult(text: string): CallToolResult {
@@ -121,7 +167,10 @@ export async function run(
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof ToolInputError) {
+    if (
+      error instanceof ToolInputError ||
+      error instanceof ResultTooLargeError
+    ) {
       return errorResult(error.message);
     }
     if (error instanceof CalibreWebApiError) {

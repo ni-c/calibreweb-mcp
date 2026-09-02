@@ -1,4 +1,5 @@
 import {
+  expectEveryToolDeclaresOutputSchema,
   expectEveryToolExercised,
   startServer,
   toolCoverage,
@@ -161,6 +162,16 @@ describe('the untrusted-content framing', () => {
       expect(result.notes?.join(' ')).toContain('untrusted data');
     }
   });
+});
+
+it('declares an output schema on every tool', async () => {
+  // The unit suite checks the same thing against a stub. Here it is checked
+  // against the server that has just answered every one of these tools with a
+  // real Calibre-Web feed — and each of those answers went through the SDK's
+  // validation against the schema below it, which is the half a stub cannot
+  // prove.
+  const { tools } = await harness.client.listTools();
+  expectEveryToolDeclaresOutputSchema(tools);
 });
 
 it('exercises every tool in the catalogue', () => {

@@ -3,8 +3,16 @@ import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
 import { READ_ONLY } from './annotations.js';
-import { jsonResult, run } from '../result.js';
-import { Notes, shapeFeed } from '../shape.js';
+import { run, untrustedResult } from '../result.js';
+import {
+  Notes,
+  notes as notesSchema,
+  pagination,
+  shapedBook,
+  shapedNavItem,
+  shapeFeed,
+  untrustedFields,
+} from '../shape.js';
 
 export function registerShelfTools(
   server: McpServer,
@@ -30,6 +38,12 @@ export function registerShelfTools(
           ),
       }),
       annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        shelves: z.array(shapedNavItem),
+        pagination,
+        notes: notesSchema,
+      }),
     },
     async ({ offset }) =>
       run(async () => {
@@ -39,7 +53,7 @@ export function registerShelfTools(
           offset === undefined || offset === 0 ? undefined : { offset }
         );
         const shaped = shapeFeed(parsed, api.url, offset ?? 0, notes);
-        return jsonResult({
+        return untrustedResult({
           shelves: shaped.navItems,
           pagination: shaped.pagination,
           notes: notes.list(),
@@ -72,6 +86,13 @@ export function registerShelfTools(
           ),
       }),
       annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        shelfId: z.number().int(),
+        books: z.array(shapedBook),
+        pagination,
+        notes: notesSchema,
+      }),
     },
     async ({ shelf_id, offset }) =>
       run(async () => {
@@ -86,7 +107,7 @@ export function registerShelfTools(
             'An empty result can also mean the shelf does not exist or is not accessible to the configured user — Calibre-Web returns an empty feed in that case.'
           );
         }
-        return jsonResult({
+        return untrustedResult({
           shelfId: shelf_id,
           books: shaped.books,
           pagination: shaped.pagination,

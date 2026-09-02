@@ -18,6 +18,14 @@ export function registerStatsTools(
         'series in the library.',
       inputSchema: z.object({}),
       annotations: READ_ONLY,
+      // No untrusted marker: four counters this server checked are numbers,
+      // and nothing a publisher wrote reaches here.
+      outputSchema: z.object({
+        books: z.number().optional(),
+        authors: z.number().optional(),
+        categories: z.number().optional().describe('Tags, in Calibre’s terms.'),
+        series: z.number().optional(),
+      }),
     },
     async () =>
       run(async () => {

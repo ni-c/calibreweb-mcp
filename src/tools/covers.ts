@@ -41,6 +41,17 @@ export function registerCoverTools(
           ),
       }),
       annotations: READ_ONLY,
+      // The image stays in `content`, where a client renders it; the schema
+      // describes it rather than repeating it. Base64 in `structuredContent`
+      // as well would double a payload that is already the largest thing this
+      // server returns, for a copy nothing would read.
+      outputSchema: z.object({
+        bookId: z.number().int(),
+        mimeType: z
+          .enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+          .describe('Of the image in the content block.'),
+        bytes: z.number().int().describe('Size of the decoded image.'),
+      }),
     },
     async ({ book_id }) =>
       run(async () => {
@@ -67,6 +78,11 @@ export function registerCoverTools(
               mimeType,
             },
           ],
+          structuredContent: {
+            bookId: book_id,
+            mimeType,
+            bytes: data.length,
+          },
         };
       })
   );

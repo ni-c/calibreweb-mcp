@@ -9,7 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every tool declares an `outputSchema` and answers with `structuredContent`
+  beside the text block. A client no longer has to parse prose to use a result.
+
+  The untrusted-content warning travels with it as `untrusted: true` and
+  `source: "calibre-web"` fields, not only as a line in `notes` — a client that
+  reads the structured half should be able to check the framing rather than
+  find it in a list of sentences. `get_stats` and `get_cover` do not carry it:
+  four counters checked to be numbers, and an id with a media type from a
+  four-entry allowlist.
+
+  What comes out of an OPDS feed is described exactly, because this server
+  shapes every field of it itself rather than passing the document on. The book
+  and feed types are now derived from those schemas, so the two cannot drift —
+  a drift would have surfaced as a failed tool call rather than a type error.
+
 ### Changed
+
+- A result that is still over the ceiling after book summaries are dropped is
+  now an **error** rather than JSON cut at the ceiling. The truncated form was
+  unparseable, which a text block tolerates and `structuredContent` cannot —
+  and the two channels have to carry the same value.
+
+- Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
 
 - Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
   always did; the change is the package layout behind it.

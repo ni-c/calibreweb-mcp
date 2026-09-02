@@ -120,6 +120,34 @@ Book entries include authors, tags, series (with index), rating, a bounded
 summary, a cover URL and per-format download URLs — ready-made links a human can
 open, since the model itself has no reason to download an EPUB.
 
+### Structured output
+
+Every tool declares an `outputSchema` and answers with `structuredContent`
+alongside the text block, so a client can use the result without parsing prose:
+
+```jsonc
+{
+  "untrusted": true,
+  "source": "calibre-web",
+  "totalFound": 2,
+  "truncated": false,
+  "books": [{ "id": 7, "title": "Dune", "authors": ["Frank Herbert"] }],
+  "notes": ["Book titles, authors, tags, series and summaries come from …"],
+}
+```
+
+The `untrusted` marker is a field and not only a line in `notes`, because a
+client that reads the structured half would otherwise have to find the warning
+in a list of sentences. The two tools without it are `get_stats`, which is four
+counters this server has checked are numbers, and `get_cover`, which reports an
+id, a media type from a four-entry allowlist and a byte count — the image itself
+stays in the content block where a client renders it.
+
+An over-budget result drops book summaries as before. Where that is still not
+enough it is now an **error** rather than JSON cut at the ceiling: unparseable
+text was tolerable in a text block and is not something `structuredContent` can
+carry, and the two channels have to hold the same value.
+
 ### Pagination
 
 Feeds are paginated by the instance's _books per page_ setting (default 60); the
