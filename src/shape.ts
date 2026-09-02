@@ -232,9 +232,12 @@ function shapeBookEntry(
     );
   }
 
+  // Through optionalText like every other plain field: `uuid` looks like a
+  // generated identifier but Calibre stores it in a free-text column, so an
+  // imported library can put anything in it.
   const uuid =
     typeof entry.id === 'string' && entry.id.startsWith('urn:uuid:')
-      ? entry.id.slice('urn:uuid:'.length)
+      ? optionalText(entry.id.slice('urn:uuid:'.length))
       : undefined;
 
   const coverUrl =
@@ -431,8 +434,30 @@ export function parseContentBlob(
   };
 }
 
+/**
+ * Reads a field that is supposed to be a string, and strips it on the way past.
+ *
+ * The strip lives here rather than at each call site because this is the funnel
+ * every plain metadata field goes through, and a guard that has to be remembered
+ * per field is a guard that gets forgotten: `published`, `updated` and a
+ * format's `mimeType` all reached the model raw while `title`, `authors`,
+ * `publisher`, `languages`, `tags` and `series` were being cleaned by
+ * {@link decodeXmlText}. A BiDi override in any of them rewrites the display
+ * order of everything around it, and a `uuid` is a free-text column in Calibre —
+ * one imported `metadata.db` is enough.
+ *
+ * A value that was nothing but unsafe characters becomes absent rather than
+ * empty, which is what the callers already do with an empty string.
+ *
+ * Entities are deliberately not decoded here. The fields that need decoding go
+ * through {@link decodeXmlText} afterwards, and doing it in both places would
+ * decode twice — `&amp;lt;` would come out as `<`, which is how markup gets
+ * reassembled downstream.
+ */
 function optionalText(value: unknown): string | undefined {
-  return typeof value === 'string' && value !== '' ? value : undefined;
+  if (typeof value !== 'string') return undefined;
+  const stripped = value.replace(UNSAFE_CHARS, '');
+  return stripped === '' ? undefined : stripped;
 }
 
 /**

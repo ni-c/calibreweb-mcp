@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Four output fields no longer carry control characters into the model
+  context.** `uuid`, `published`, `updated` and a format's `mimeType` reached
+  the result verbatim while `title`, `authors`, `publisher`, `languages`,
+  `tags`, `format` and `series` were being cleaned — so the assurance in
+  `decodeXmlText`'s docstring, that library metadata is safe for the model and
+  for any terminal rendering it, did not hold for them. A BiDi override such as
+  U+202E reverses the display order of everything after it, which is the
+  Trojan-Source trick; `uuid` in particular is a plain text column in Calibre,
+  and an imported `metadata.db` fills it with whatever it likes.
+
+  The strip now happens in `optionalText`, the funnel every plain metadata field
+  already goes through, rather than field by field — a guard that has to be
+  remembered per field is a guard that gets forgotten, which is exactly how
+  these four were missed.
+
 - An entry in `CALIBRE_WEB_ALLOW_TOOLS` that is not tool-name-shaped is now
   **redacted** in the error rather than quoted back. `CALIBRE_WEB_PASSWORD` and
   `CALIBRE_WEB_ALLOW_TOOLS` are adjacent lines in every compose file, and a
