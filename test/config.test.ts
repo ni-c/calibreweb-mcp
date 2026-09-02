@@ -118,6 +118,8 @@ describe('missingConfigKeys', () => {
         username: undefined,
         password: undefined,
         insecureTls: false,
+        allowTools: undefined,
+        denyTools: undefined,
       })
     ).toEqual([]);
   });
@@ -129,6 +131,8 @@ describe('missingConfigKeys', () => {
         username: 'u',
         password: undefined,
         insecureTls: false,
+        allowTools: undefined,
+        denyTools: undefined,
       })
     ).toEqual(['CALIBRE_WEB_PASSWORD']);
   });
@@ -140,6 +144,8 @@ describe('missingConfigKeys', () => {
         username: 'u',
         password: 'p',
         insecureTls: false,
+        allowTools: undefined,
+        denyTools: undefined,
       })
     ).toEqual(['CALIBRE_WEB_URL']);
   });

@@ -11,6 +11,8 @@ export const testConfig: Config = {
   username: 'reader',
   password: 'secret',
   insecureTls: false,
+  allowTools: undefined,
+  denyTools: undefined,
 };
 
 /** The Authorization header the test config must produce. */
