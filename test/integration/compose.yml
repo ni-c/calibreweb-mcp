@@ -23,10 +23,16 @@ services:
       # `title_sort` and `uuid4` SQL functions. Generating one at run time
       # would mean reimplementing those. Three books, ~450 kB, read-only.
       - ./library:/books:ro
-      # Calibre-Web's own configuration database, which it creates on first
-      # start. tmpfs, so every run begins at the setup wizard.
-      - config:/config
+    # Calibre-Web's own configuration database, which it creates on first start.
+    # tmpfs rather than a named volume, so every run really does begin at the
+    # setup wizard: a named volume survives `down` without `-v`, and this
+    # bootstrap seeds a shelf at a fixed name — a second run against surviving
+    # config would create a second shelf of that name and assert against
+    # whichever one came back first.
+    #
+    # Mode 0o1777 because the default 0755 is root-owned and the image runs as
+    # PUID 1000.
+    tmpfs:
+      - /config:mode=1777
     ports:
       - '127.0.0.1:8083:8083'
-volumes:
-  config:

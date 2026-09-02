@@ -28,7 +28,50 @@ export const SHELVED = [1, 2];
 
 export interface Sandbox {
   url: string;
+  /** Id Calibre-Web gave {@link SHELF}, read back rather than assumed. */
+  shelfId: number;
   env: Record<string, string>;
+}
+
+/**
+ * Finds the id of a shelf by title in the OPDS shelf index.
+ *
+ * `/opds/shelfindex` is the same feed `list_shelves` reads, so a shelf this
+ * cannot see is one the suite could not have asserted on either. Entries carry
+ * their id only in the acquisition link, `/opds/shelf/<id>`.
+ */
+function shelfIdNamed(feed: string, title: string): number | undefined {
+  for (const entry of feed.split('<entry>').slice(1)) {
+    // Prefix rather than equality: Calibre-Web appends a localized visibility
+    // suffix to a public shelf's title, which is the very thing this suite's
+    // `isPublic` assertion is about.
+    if (!entry.includes(`<title>${title}`)) continue;
+    const id = /\/opds\/shelf\/(\d+)/.exec(entry)?.[1];
+    if (id !== undefined) return Number(id);
+  }
+  return undefined;
+}
+
+/**
+ * Fetches an OPDS feed, which is the half of Calibre-Web the session cannot
+ * reach.
+ *
+ * `/opds/*` answers 401 to a session cookie and wants HTTP Basic — the same way
+ * this server authenticates, and a different mechanism from the browser forms
+ * the rest of this bootstrap drives. Two auth schemes in one application, and
+ * the login page comes back looking like an empty feed if the wrong one is used.
+ */
+async function opds(url: string, path: string): Promise<string> {
+  const response = await fetch(`${url}${path}`, {
+    headers: {
+      authorization: `Basic ${Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64')}`,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    throw new Error(`GET ${path} failed: HTTP ${response.status}`);
+  }
+  return response.text();
 }
 
 /** Pulls the CSRF token out of a rendered Calibre-Web form. */
@@ -129,13 +172,16 @@ export async function bootstrap(
   }
 
   const dbconfig = await session.get('/admin/dbconfig');
-  if (!dbconfig.includes('config_calibre_dir')) {
-    // Already configured, which on a fresh volume should not happen — and
-    // saying which state it is in beats the OPDS feed coming back empty later.
+  if (!dbconfig.includes('csrf_token')) {
+    // No form at all, so the login did not take. Deliberately *not* a check for
+    // `config_calibre_dir`: that is the permanent database-settings page, and
+    // it renders the field with the current path filled in long after the
+    // instance is configured — so a check for its presence passes on exactly
+    // the dirty stack it was written to catch. The freshness check that does
+    // work is on the shelf, below.
     throw new Error(
-      'Calibre-Web did not offer the library form. Either the login did not ' +
-        'take, or this instance is already configured — run `docker compose ' +
-        '-f test/integration/compose.yml down -v` and up again.'
+      'Calibre-Web did not offer the library form, so the login did not take. ' +
+        `Are ${USERNAME}/${PASSWORD} still the image's defaults?`
     );
   }
   const configured = await session.post('/admin/dbconfig', {
@@ -159,6 +205,20 @@ export async function bootstrap(
     ready: (response) => response.status !== 500,
   });
 
+  // The freshness check. Config lives on a tmpfs, so a shelf of this name can
+  // only exist because the stack was brought up twice without `down -v` — and
+  // that is the state this bootstrap cannot survive: Calibre-Web happily
+  // creates a second shelf with the same title, and `list_shelves` then answers
+  // with two, of which the suite would assert against whichever came first.
+  if (shelfIdNamed(await opds(url, '/opds/shelfindex'), SHELF) !== undefined) {
+    throw new Error(
+      `This Calibre-Web already has a shelf called "${SHELF}", and the suite ` +
+        'needs a fresh one: it seeds a shelf at a fixed name and Calibre-Web ' +
+        'does not refuse a duplicate. Run `docker compose -f ' +
+        'test/integration/compose.yml down -v` and up again.'
+    );
+  }
+
   // A shelf with books on it, so `list_shelves` and `get_shelf_books` have
   // something to answer. Shelves are a Calibre-Web concept rather than a
   // Calibre one, so they cannot come from the fixture library.
@@ -172,8 +232,24 @@ export async function bootstrap(
   if (created >= 400) {
     throw new Error(`Calibre-Web refused to create a shelf: HTTP ${created}`);
   }
+
+  // Read the id back rather than assuming 1. The create form does not return
+  // it, and the shelf table is not reset by anything the suite controls, so the
+  // first shelf of a run is only id 1 on a stack that has never had another.
+  const shelfId = shelfIdNamed(await opds(url, '/opds/shelfindex'), SHELF);
+  if (shelfId === undefined) {
+    throw new Error(
+      `Calibre-Web accepted the shelf but /opds/shelfindex does not list ` +
+        `"${SHELF}". The shelf index is what list_shelves reads, so the suite ` +
+        'would fail later and further from the cause.'
+    );
+  }
+
   for (const bookId of SHELVED) {
-    const added = await session.postCsrfHeader(`/shelf/add/1/${bookId}`, token);
+    const added = await session.postCsrfHeader(
+      `/shelf/add/${shelfId}/${bookId}`,
+      token
+    );
     if (added >= 400) {
       throw new Error(
         `Calibre-Web refused to shelve book ${bookId}: HTTP ${added}`
@@ -183,6 +259,7 @@ export async function bootstrap(
 
   return {
     url,
+    shelfId,
     env: {
       CALIBRE_WEB_URL: url,
       CALIBRE_WEB_USERNAME: USERNAME,

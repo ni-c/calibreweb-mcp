@@ -101,8 +101,13 @@ describe('shelves', () => {
     const shelves = parse<{
       shelves: { id: number; name: string; isPublic?: boolean }[];
     }>(await harness.call('list_shelves'));
-    const shelf = shelves.shelves.find((s) => s.name === SHELF);
-    expect(shelf).toBeDefined();
+    // Exactly one, and the one the bootstrap made. Calibre-Web does not refuse
+    // a second shelf of the same title, so a length assertion here is what
+    // notices a stack that was reused rather than recreated.
+    const named = shelves.shelves.filter((s) => s.name === SHELF);
+    expect(named).toHaveLength(1);
+    const shelf = named[0];
+    expect(shelf!.id).toBe(sandbox.shelfId);
     // `isPublic` is only reported on an English-locale instance, because
     // Calibre-Web marks public shelves with a localized title suffix and this
     // server parses that suffix. The container runs in English.
