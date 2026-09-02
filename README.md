@@ -7,6 +7,7 @@
 [![license](https://img.shields.io/npm/l/calibreweb-mcp)](LICENSE)
 [![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-blue)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
 [![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-informational)](https://calibreweb-mcp.ni-c.de)
+[![HTTP • via mcp-hub](https://img.shields.io/badge/HTTP-via%20mcp--hub-6f42c1)](https://mcp-hub.ni-c.de)
 [![sponsor](https://img.shields.io/badge/sponsor-ni--c-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ni-c)
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for
@@ -42,6 +43,18 @@ HTTP Basic auth in, structured book data out.
 
 ![Demo: listing the tools, searching the library and reading the stats through the MCP Inspector CLI](https://calibreweb-mcp.ni-c.de/demo.gif)
 
+## What makes it different
+
+**The API Calibre-Web never had.** Calibre-Web exposes no REST API — its only
+stable machine interface is the OPDS Atom feed built for e-reader apps. These
+tools parse that feed into structured book data with numeric ids, per-format
+download URLs and bounded summaries.
+
+**Read-only by construction.** All six tools are GETs. Redirects are refused so
+Basic credentials never travel, XML carrying a DOCTYPE is rejected outright,
+hrefs are locked to the configured origin, and metadata is marked as the
+untrusted data it is.
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -65,6 +78,29 @@ HTTP Basic auth in, structured book data out.
 
 ¹ Leave **both** unset for an instance that allows anonymous browsing; setting
 only one of them is a configuration error.
+
+### Choosing which tools load
+
+`CALIBRE_WEB_ALLOW_TOOLS` and `CALIBRE_WEB_DENY_TOOLS` take comma-separated tool names;
+a trailing `*` matches a whole family. `essential` is a curated preset of
+five: `search_books`, `list_books`, `list_shelves`, `get_shelf_books`, `get_stats`.
+
+```sh
+CALIBRE_WEB_ALLOW_TOOLS=essential
+CALIBRE_WEB_ALLOW_TOOLS=search_books,list_shelves
+CALIBRE_WEB_DENY_TOOLS=get_cover
+```
+
+An entry that matches no tool aborts startup and names it, so a typo cannot
+silently hide a tool — an absent tool is not something anyone traces back to an
+environment variable. A filtered tool is never registered, so it is absent from
+`tools/list` and unknown to `tools/call` alike.
+
+If you run several of these servers at once, [mcp-hub](https://mcp-hub.ni-c.de)
+is the other answer — its `/hub` endpoint replaces every server's tools with six
+meta-tools.
+
+## Installation
 
 ### Claude Code
 
@@ -102,6 +138,46 @@ command = "npx"
 args = ["calibreweb-mcp"]
 env = { CALIBRE_WEB_URL = "https://books.example.com", CALIBRE_WEB_USERNAME = "reader", CALIBRE_WEB_PASSWORD = "..." }
 ```
+
+### Docker
+
+```sh
+docker run -i --rm \
+  -e CALIBRE_WEB_URL=https://books.example.com \
+  -e CALIBRE_WEB_USERNAME=reader \
+  -e CALIBRE_WEB_PASSWORD=... \
+  ghcr.io/ni-c/calibreweb-mcp
+```
+
+### Through mcp-hub
+
+A client that cannot spawn a local process — ChatGPT connectors, Claude on the web,
+Cursor, LibreChat — reaches calibreweb-mcp through [mcp-hub](https://mcp-hub.ni-c.de): one
+container serves many stdio MCP servers over Streamable HTTP, with an OAuth 2.1 login
+behind a single password and long-lived tokens for the clients that cannot do OAuth. Its
+`/hub` endpoint puts every server behind six meta-tools, so one connector reaches all of
+them without N×tool schemas in the model's context, and it speaks both protocol revisions
+— a question this server asks travels through it to the person at the far end.
+
+Its `/config/mcp.json` uses Claude Code's format, so the entry is the one you already
+have:
+
+```json
+{
+  "mcpServers": {
+    "calibreweb": {
+      "command": "npx",
+      "args": ["-y", "calibreweb-mcp"],
+      "env": { "CALIBRE_WEB_ALLOW_TOOLS": "essential" },
+      "denyTools": ["get_cover"]
+    }
+  }
+}
+```
+
+`allowTools` and `denyTools` there are the hub's **own** per-server filter, which is not
+the same thing as `*_ALLOW_TOOLS` in `env` — the difference, and the mistake it invites,
+are in the [client guide](https://calibreweb-mcp.ni-c.de/guide/clients#through-mcp-hub).
 
 ## Tools
 
@@ -155,7 +231,7 @@ page size is not client-controllable. Every listing returns
 `pagination.nextOffset` when more pages exist — pass it as `offset` in the next
 call. The `discover` view is a random selection and not paginated.
 
-### Deliberately out of scope
+## Not exposed, on purpose
 
 - **No writes.** The OPDS feed has none, and this server would not add any.
 - **No file downloads.** Tools return download URLs, not ebook payloads.
@@ -179,15 +255,10 @@ call. The `discover` view is a random selection and not paginated.
 - The password is scrubbed from the process environment at startup, and URLs
   are credential-redacted before they appear in any log or result.
 
-## Container
+## Documentation
 
-```sh
-docker run -i --rm \
-  -e CALIBRE_WEB_URL=https://books.example.com \
-  -e CALIBRE_WEB_USERNAME=reader \
-  -e CALIBRE_WEB_PASSWORD=... \
-  ghcr.io/ni-c/calibreweb-mcp
-```
+The full guide, tool reference and security notes live at
+**[calibreweb-mcp.ni-c.de](https://calibreweb-mcp.ni-c.de)** (source in [`docs/`](docs/)).
 
 ## Development
 
@@ -206,27 +277,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 2. `npm run lint && npm run test:coverage && npm run build`
 3. Tag the release: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`
 
+## Contributing
+
+Issues, discussions and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md). For vulnerabilities please use
+[private reporting](https://github.com/ni-c/calibreweb-mcp/security/advisories/new)
+rather than a public issue; the policy is in [SECURITY.md](SECURITY.md).
+
 ## License
 
-[MIT](LICENSE)
-
-### Choosing which tools load
-
-`CALIBRE_WEB_ALLOW_TOOLS` and `CALIBRE_WEB_DENY_TOOLS` take comma-separated tool names;
-a trailing `*` matches a whole family. `essential` is a curated preset of
-five: `search_books`, `list_books`, `list_shelves`, `get_shelf_books`, `get_stats`.
-
-```sh
-CALIBRE_WEB_ALLOW_TOOLS=essential
-CALIBRE_WEB_ALLOW_TOOLS=search_books,list_shelves
-CALIBRE_WEB_DENY_TOOLS=get_cover
-```
-
-An entry that matches no tool aborts startup and names it, so a typo cannot
-silently hide a tool — an absent tool is not something anyone traces back to an
-environment variable. A filtered tool is never registered, so it is absent from
-`tools/list` and unknown to `tools/call` alike.
-
-If you run several of these servers at once, [mcp-hub](https://mcp-hub.ni-c.de)
-is the other answer — its `/hub` endpoint replaces every server's tools with six
-meta-tools.
+[MIT](LICENSE) © Willi Thiel
