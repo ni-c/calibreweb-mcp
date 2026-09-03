@@ -11,7 +11,7 @@ services:
   calibre-web:
     # Overridable so the weekly CI run can point at :latest and report drift
     # without changing what the PR gate tests.
-    image: ${CALIBRE_WEB_IMAGE:-lscr.io/linuxserver/calibre-web:0.6.24}
+    image: ${CALIBRE_WEB_IMAGE:-lscr.io/linuxserver/calibre-web:0.6.27}
     environment:
       PUID: '1000'
       PGID: '1000'
