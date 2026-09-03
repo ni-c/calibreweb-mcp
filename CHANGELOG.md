@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- #region changelog -->
 
-## [Unreleased]
+## [0.3.0] - 2026-09-03
 
 ### Added
 
@@ -39,8 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now an **error** rather than JSON cut at the ceiling. The truncated form was
   unparseable, which a text block tolerates and `structuredContent` cannot —
   and the two channels have to carry the same value.
-
-- Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
 
 - Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
   always did; the change is the package layout behind it.
@@ -170,6 +168,8 @@ request whose target a caller can choose.
 - Hardened XML pipeline: DOCTYPE/entity refusal, no entity processing, bounded
   response bodies, control-character stripping, credential redaction.
 
+[0.3.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.3.0
+[0.2.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.2.0
 [0.1.2]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.0

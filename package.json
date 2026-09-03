@@ -1,6 +1,6 @@
 {
   "name": "calibreweb-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "mcpName": "io.github.ni-c/calibreweb-mcp",
   "description": "MCP server for Calibre-Web — read-only library access via the OPDS feed",
   "keywords": [
