@@ -1,10 +1,18 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
-import { jsonResult, run } from '../result.js';
-import { Notes, shapeFeed } from '../shape.js';
+import { READ_ONLY } from './annotations.js';
+import { run, untrustedResult } from '../result.js';
+import {
+  Notes,
+  notes as notesSchema,
+  pagination,
+  shapedBook,
+  shapedNavItem,
+  shapeFeed,
+  untrustedFields,
+} from '../shape.js';
 
 export function registerShelfTools(
   server: McpServer,
@@ -19,7 +27,7 @@ export function registerShelfTools(
         'plus the user’s own private ones. Use the returned id with ' +
         'get_shelf_books. isPublic is only reported on English-locale instances ' +
         '(Calibre-Web marks public shelves with a localized title suffix).',
-      inputSchema: {
+      inputSchema: z.object({
         offset: z
           .number()
           .int()
@@ -28,8 +36,14 @@ export function registerShelfTools(
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
-      annotations: { readOnlyHint: true },
+      }),
+      annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        shelves: z.array(shapedNavItem),
+        pagination,
+        notes: notesSchema,
+      }),
     },
     async ({ offset }) =>
       run(async () => {
@@ -39,7 +53,7 @@ export function registerShelfTools(
           offset === undefined || offset === 0 ? undefined : { offset }
         );
         const shaped = shapeFeed(parsed, api.url, offset ?? 0, notes);
-        return jsonResult({
+        return untrustedResult({
           shelves: shaped.navItems,
           pagination: shaped.pagination,
           notes: notes.list(),
@@ -55,7 +69,7 @@ export function registerShelfTools(
         'Lists the books on a shelf, in the shelf’s own order. Shelf ids ' +
         'come from list_shelves. Book entries include per-format download URLs ' +
         'and a cover URL; fetch the cover image itself with get_cover.',
-      inputSchema: {
+      inputSchema: z.object({
         shelf_id: z
           .number()
           .int()
@@ -70,8 +84,15 @@ export function registerShelfTools(
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
-      annotations: { readOnlyHint: true },
+      }),
+      annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        shelfId: z.number().int(),
+        books: z.array(shapedBook),
+        pagination,
+        notes: notesSchema,
+      }),
     },
     async ({ shelf_id, offset }) =>
       run(async () => {
@@ -86,7 +107,7 @@ export function registerShelfTools(
             'An empty result can also mean the shelf does not exist or is not accessible to the configured user — Calibre-Web returns an empty feed in that case.'
           );
         }
-        return jsonResult({
+        return untrustedResult({
           shelfId: shelf_id,
           books: shaped.books,
           pagination: shaped.pagination,

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { errorResult, run } from '../result.js';
 
 /**
@@ -30,7 +30,7 @@ export function registerCoverTools(
         'from the other tools (books with id null have no cover). Calibre-Web ' +
         'serves the full-size cover; images over 1 MB are refused to protect ' +
         'the context window — use the coverUrl from the book entry instead.',
-      inputSchema: {
+      inputSchema: z.object({
         book_id: z
           .number()
           .int()
@@ -39,8 +39,19 @@ export function registerCoverTools(
           .describe(
             'Numeric book id from search_books, list_books or get_shelf_books'
           ),
-      },
-      annotations: { readOnlyHint: true },
+      }),
+      annotations: READ_ONLY,
+      // The image stays in `content`, where a client renders it; the schema
+      // describes it rather than repeating it. Base64 in `structuredContent`
+      // as well would double a payload that is already the largest thing this
+      // server returns, for a copy nothing would read.
+      outputSchema: z.object({
+        bookId: z.number().int(),
+        mimeType: z
+          .enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+          .describe('Of the image in the content block.'),
+        bytes: z.number().int().describe('Size of the decoded image.'),
+      }),
     },
     async ({ book_id }) =>
       run(async () => {
@@ -67,6 +78,11 @@ export function registerCoverTools(
               mimeType,
             },
           ],
+          structuredContent: {
+            bookId: book_id,
+            mimeType,
+            bytes: data.length,
+          },
         };
       })
   );

@@ -1,9 +1,10 @@
 import { createRequire } from 'node:module';
+import { McpServer } from '@modelcontextprotocol/server';
+import { buildToolFilter, installToolFilter } from 'mcp-tool-allowlist';
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ALL_TOOLS, ESSENTIAL_TOOLS } from './tools/catalogue.js';
 
 import { CalibreWebApi } from './api.js';
-import { buildToolFilter, installToolFilter } from './tool-filter.js';
 import type { Config } from './config.js';
 import { registerBookTools } from './tools/books.js';
 import { registerCoverTools } from './tools/covers.js';
@@ -23,7 +24,19 @@ function packageVersion(): string {
 export function createServer(config: Config): McpServer {
   // Before anything is built: an unusable tool list should fail on the
   // way in, not leave a server running with tools quietly missing.
-  const filter = buildToolFilter(config);
+  const filter = buildToolFilter({
+    allowTools: config.allowTools,
+    denyTools: config.denyTools,
+    catalogue: {
+      all: ALL_TOOLS,
+      essential: ESSENTIAL_TOOLS,
+    },
+    names: {
+      allow: 'CALIBRE_WEB_ALLOW_TOOLS',
+      deny: 'CALIBRE_WEB_DENY_TOOLS',
+      server: 'calibreweb-mcp',
+    },
+  });
 
   const api = new CalibreWebApi(config);
 

@@ -1,7 +1,5 @@
 import { vi, type MockInstance } from 'vitest';
-
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 
 import type { Config } from '../src/config.js';
 import { createServer } from '../src/server.js';
@@ -13,6 +11,8 @@ export const testConfig: Config = {
   username: 'reader',
   password: 'secret',
   insecureTls: false,
+  allowTools: undefined,
+  denyTools: undefined,
 };
 
 /** The Authorization header the test config must produce. */

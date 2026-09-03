@@ -16,8 +16,20 @@ the OPDS feed, but the credentials themselves are not limited to that. So:
 ## Read-only by construction
 
 There is no read-only *mode* — there is nothing else. The server registers six
-tools, all annotated `readOnlyHint`, all GET requests. It keeps no state, writes
-no files, and has no confirmation flows because there is nothing to confirm.
+tools, all GET requests. It keeps no state and writes no files.
+
+Every one declares all four MCP annotations — `readOnlyHint: true`,
+`destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false` — rather
+than leaving three of them to the defaults. That is not a formality: the
+specification gives `destructiveHint` and `openWorldHint` a default of **true**,
+so a tool that says only `readOnlyHint: true` is silent about two claims and
+inherits the stronger one for both.
+
+There is no approval dialog and no `ELICITATION` variable here, because there is
+nothing to ask about: no tool of this server changes anything. The other servers
+in this family have one — see, for instance,
+[imap-mcp's](https://imap-mcp.ni-c.de/guide/approval) — and a variable that did
+nothing would be worse than none at all.
 
 ## Transport
 

@@ -1,6 +1,8 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
+import { z } from 'zod';
 
 import type { CalibreWebApi } from '../api.js';
+import { READ_ONLY } from './annotations.js';
 import { jsonResult, run } from '../result.js';
 
 export function registerStatsTools(
@@ -14,8 +16,16 @@ export function registerStatsTools(
       description:
         'Returns the total number of books, authors, categories (tags) and ' +
         'series in the library.',
-      inputSchema: {},
-      annotations: { readOnlyHint: true },
+      inputSchema: z.object({}),
+      annotations: READ_ONLY,
+      // No untrusted marker: four counters this server checked are numbers,
+      // and nothing a publisher wrote reaches here.
+      outputSchema: z.object({
+        books: z.number().optional(),
+        authors: z.number().optional(),
+        categories: z.number().optional().describe('Tags, in Calibre’s terms.'),
+        series: z.number().optional(),
+      }),
     },
     async () =>
       run(async () => {

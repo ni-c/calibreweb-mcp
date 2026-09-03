@@ -9,6 +9,19 @@ Six tools, all read-only (`readOnlyHint: true`). Every result that carries
 library data includes a `notes` array — budget truncations, dropped links and
 the untrusted-data marker all land there.
 
+Every tool declares an `outputSchema` and answers with `structuredContent`
+beside the text block, so a client can use a result without parsing prose. The
+untrusted-content warning travels with it as `untrusted: true` and
+`source: "calibre-web"` fields, so it can be checked rather than looked for in
+`notes`. Two tools do not carry it: `get_stats`, which is four counters this
+server has checked are numbers, and `get_cover`, which reports an id, a media
+type from a four-entry allowlist and a byte count — the image itself stays in
+the content block where a client renders it.
+
+Because this server shapes every field out of the OPDS document rather than
+passing the document on, the schemas describe the result exactly. The book and
+feed types are derived from them, so the two cannot drift.
+
 ## Book objects
 
 Book-listing tools return entries of this shape (absent fields are omitted):

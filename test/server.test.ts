@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import {
   bookEntryXml,
   connect,
@@ -11,6 +9,7 @@ import {
   navEntryXml,
   stubCalibreWeb,
 } from './helpers.js';
+import { expectPortableToolSchemas } from 'mcp-integration-harness';
 
 const TOOLS = [
   'search_books',
@@ -46,6 +45,79 @@ describe('tool registration', () => {
     const { tools } = await client.listTools();
     for (const tool of tools) {
       expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+    }
+  });
+
+  it('declares an output schema on every tool', async () => {
+    // The same argument as the annotations below, one field along. A tool that
+    // says nothing about its result forces a client to parse prose to find out
+    // what it got, and the SDK sends no `structuredContent` at all for a tool
+    // that declared no schema — so the machine-readable half does not exist
+    // until this is here.
+    const client = await connect();
+    const { tools } = await client.listTools();
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.outputSchema, tool.name).toBeDefined();
+      // An object root, not merely a schema. SEP-2106 allows an array or a
+      // scalar, but a 2025-era client is served that same tool with the schema
+      // rewritten to `{result: …}` — so the tool would answer in two different
+      // shapes depending on who asked.
+      expect(tool.outputSchema?.type, tool.name).toBe('object');
+    }
+  });
+
+  it('advertises schemas every client can read', async () => {
+    // Legal JSON Schema is not enough. `{}` in a schema position — what zod
+    // writes for `looseObject`, `catchall` and `z.unknown()` — and `type` as an
+    // array are both refused, or silently dropped, by some clients. Neither is
+    // a contract: each has an equivalent spelling that says the same thing, so
+    // there is nothing here to excuse.
+    const client = await connect();
+    const { tools } = await client.listTools();
+    expectPortableToolSchemas(tools);
+  });
+
+  it('marks every result built from library metadata as untrusted', async () => {
+    // The marker has to survive into the structured channel, or a client that
+    // reads only `structuredContent` — which is the point of declaring a schema
+    // at all — gets a publisher's free text with no framing whatsoever.
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const plain = tools
+      .filter((tool) => {
+        const properties = tool.outputSchema?.properties as
+          Record<string, unknown> | undefined;
+        return properties?.untrusted === undefined;
+      })
+      .map((tool) => tool.name)
+      .sort();
+    // get_stats is four counters this server checked are numbers; get_cover
+    // reports an id, a media type from a four-entry allowlist and a byte
+    // count. Neither carries anything a publisher wrote.
+    expect(plain).toEqual(['get_cover', 'get_stats']);
+  });
+
+  it('declares all four annotation hints on every tool', async () => {
+    // Not a style rule. Two of the four default to a *stronger* claim than
+    // silence suggests: the specification gives destructiveHint and
+    // openWorldHint a default of true, so a tool that omits them announces
+    // itself as destructive and open-world. Leaving them out is a statement,
+    // not an abstention — so every tool states all four.
+    const client = await connect();
+    const { tools } = await client.listTools();
+    const hints = [
+      'readOnlyHint',
+      'destructiveHint',
+      'idempotentHint',
+      'openWorldHint',
+    ] as const;
+    for (const tool of tools) {
+      for (const hint of hints) {
+        expect(typeof tool.annotations?.[hint], `${tool.name}.${hint}`).toBe(
+          'boolean'
+        );
+      }
     }
   });
 

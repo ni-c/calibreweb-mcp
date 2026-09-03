@@ -1,10 +1,17 @@
 import { z } from 'zod';
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 import type { CalibreWebApi } from '../api.js';
-import { jsonResult, run, ToolInputError } from '../result.js';
-import { Notes, shapeFeed } from '../shape.js';
+import { READ_ONLY } from './annotations.js';
+import { run, ToolInputError, untrustedResult } from '../result.js';
+import {
+  Notes,
+  notes as notesSchema,
+  pagination,
+  shapedBook,
+  shapeFeed,
+  untrustedFields,
+} from '../shape.js';
 
 const SEARCH_DEFAULT_LIMIT = 50;
 const SEARCH_MAX_LIMIT = 200;
@@ -29,7 +36,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
         'on a large library are truncated client-side — totalFound reports the ' +
         'real match count. Book entries include per-format download URLs and a ' +
         'cover URL; fetch the cover image itself with get_cover.',
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).max(500).describe('Search term'),
         limit: z
           .number()
@@ -40,8 +47,18 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .describe(
             `Maximum number of books to return (default ${SEARCH_DEFAULT_LIMIT}, max ${SEARCH_MAX_LIMIT})`
           ),
-      },
-      annotations: { readOnlyHint: true },
+      }),
+      annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        totalFound: z
+          .number()
+          .int()
+          .describe('Matches in the library, before the limit was applied.'),
+        truncated: z.boolean(),
+        books: z.array(shapedBook),
+        notes: notesSchema,
+      }),
     },
     async ({ query, limit }) =>
       run(async () => {
@@ -55,7 +72,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
             `The search matched ${books.length} books; only the first ${max} are shown. Narrow the query or raise the limit parameter.`
           );
         }
-        return jsonResult({
+        return untrustedResult({
           totalFound: books.length,
           truncated,
           books: books.slice(0, max),
@@ -76,7 +93,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
         'a letter). Page size is a server-side setting; pass the returned ' +
         'pagination.nextOffset as offset to fetch the next page. The discover ' +
         'view is random and not paginated.',
-      inputSchema: {
+      inputSchema: z.object({
         view: z
           .enum(['new', 'hot', 'rated', 'discover', 'read', 'unread', 'all'])
           .optional()
@@ -95,8 +112,23 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
           ),
-      },
-      annotations: { readOnlyHint: true },
+      }),
+      annotations: READ_ONLY,
+      outputSchema: z.object({
+        ...untrustedFields,
+        view: z.enum([
+          'new',
+          'hot',
+          'rated',
+          'discover',
+          'read',
+          'unread',
+          'all',
+        ]),
+        books: z.array(shapedBook),
+        pagination,
+        notes: notesSchema,
+      }),
     },
     async ({ view, letter, offset }) =>
       run(async () => {
@@ -123,7 +155,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
         const notes = new Notes();
         const parsed = await api.getFeed(path, params);
         const shaped = shapeFeed(parsed, api.url, offset ?? 0, notes);
-        return jsonResult({
+        return untrustedResult({
           view: selected,
           books: shaped.books,
           pagination: shaped.pagination,

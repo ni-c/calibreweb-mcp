@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- #region changelog -->
 
+## [Unreleased]
+
+### Added
+
+- Every tool declares an `outputSchema` and answers with `structuredContent`
+  beside the text block. A client no longer has to parse prose to use a result.
+
+  The untrusted-content warning travels with it as `untrusted: true` and
+  `source: "calibre-web"` fields, not only as a line in `notes` — a client that
+  reads the structured half should be able to check the framing rather than
+  find it in a list of sentences. `get_stats` and `get_cover` do not carry it:
+  four counters checked to be numbers, and an id with a media type from a
+  four-entry allowlist.
+
+  What comes out of an OPDS feed is described exactly, because this server
+  shapes every field of it itself rather than passing the document on. The book
+  and feed types are now derived from those schemas, so the two cannot drift —
+  a drift would have surfaced as a failed tool call rather than a type error.
+
+### Changed
+
+- The advertised schemas avoid a spelling that is legal JSON Schema and still
+  gets a tool refused, or its constraint silently dropped, by some MCP clients:
+  a nullable field is written as `anyOf` branches rather than `"type":
+["string", "null"]`, which several clients read as a single type and then
+  drop. What the tools accept and return is unchanged; only the way the schema
+  says so is.
+
+- A result that is still over the ceiling after book summaries are dropped is
+  now an **error** rather than JSON cut at the ceiling. The truncated form was
+  unparseable, which a text block tolerates and `structuredContent` cannot —
+  and the two channels have to carry the same value.
+
+- Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
+
+- Runs on **MCP SDK 2.0**. Existing clients see the same protocol revision they
+  always did; the change is the package layout behind it.
+
+- The linter is **oxlint** instead of eslint plus typescript-eslint, which
+  lifts the TypeScript ceiling: typescript-eslint pins `typescript` below 6.1,
+  so this repository was held on TypeScript 6 by its linter rather than by its
+  code.
+
+- The tool filter, the host classifier and the documentation-asset generator
+  now come from **`mcp-tool-allowlist`**, **`mcp-internal-hosts`** and
+  **`svg-asset-set`** rather than from copies kept here — 674 fewer lines, and
+  one place to fix each. None of them has a runtime dependency of its own.
+
+- stdio is served through `serveStdio`, so the connection's era is negotiated
+  on the opening exchange rather than assumed. A client that pins the
+  `2026-07-28` era is served it; until now its `server/discover` probe was
+  answered with "Method not found" and only `2025-11-25` was on offer. A client
+  that speaks the older era sees no change — it is still pinned to one instance
+  for the life of the connection, exactly as a hand-wired
+  `StdioServerTransport` served it.
+
+### Fixed
+
+- **Four output fields no longer carry control characters into the model
+  context.** `uuid`, `published`, `updated` and a format's `mimeType` reached
+  the result verbatim while `title`, `authors`, `publisher`, `languages`,
+  `tags`, `format` and `series` were being cleaned — so the assurance in
+  `decodeXmlText`'s docstring, that library metadata is safe for the model and
+  for any terminal rendering it, did not hold for them. A BiDi override such as
+  U+202E reverses the display order of everything after it, which is the
+  Trojan-Source trick; `uuid` in particular is a plain text column in Calibre,
+  and an imported `metadata.db` fills it with whatever it likes.
+
+  The strip now happens in `optionalText`, the funnel every plain metadata field
+  already goes through, rather than field by field — a guard that has to be
+  remembered per field is a guard that gets forgotten, which is exactly how
+  these four were missed.
+
+- An entry in `CALIBRE_WEB_ALLOW_TOOLS` that is not tool-name-shaped is now
+  **redacted** in the error rather than quoted back. `CALIBRE_WEB_PASSWORD` and
+  `CALIBRE_WEB_ALLOW_TOOLS` are adjacent lines in every compose file, and a
+  paste into the wrong one used to print the credential into the client's log.
+
 ## [0.2.0] - 2026-08-27
 
 ### Added

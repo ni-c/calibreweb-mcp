@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 import { CalibreWebApi } from '../src/api.js';
-import { jsonResult, run } from '../src/result.js';
+import { jsonResult, ResultTooLargeError, run } from '../src/result.js';
 import { connect, stubCalibreWeb, testConfig } from './helpers.js';
 
 function firstText(result: CallToolResult): string {
@@ -25,20 +24,30 @@ describe('jsonResult ceiling', () => {
       id: i,
       summary: 's'.repeat(10_000),
     }));
-    const text = firstText(jsonResult({ books }));
-    expect(text.length).toBeLessThanOrEqual(400_000 + 200);
+    const result = jsonResult({ books });
+    const text = firstText(result);
+    expect(text.length).toBeLessThanOrEqual(400_000 + 400);
     expect(text).toContain('(omitted: result too large)');
     expect(text).toContain('summaries were dropped');
+    // The note goes into `notes`, on the value — not appended to the
+    // serialization, which `structuredContent` would not have carried.
+    expect(
+      (result.structuredContent as { notes: string[] }).notes.at(-1)
+    ).toContain('summaries were dropped');
   });
 
-  it('hard-truncates when even the stripped payload is too large', () => {
+  it('refuses when even the stripped payload is too large', () => {
+    // It used to answer with the JSON cut at the ceiling — unparseable, but
+    // visible. That stopped being an option when every tool gained an output
+    // schema: `structuredContent` has to parse, and the two channels have to
+    // carry the same value. So there is no answer of this size, and saying so
+    // is the honest result.
     const books = Array.from({ length: 5000 }, (_, i) => ({
       id: i,
       title: 't'.repeat(100),
     }));
-    const text = firstText(jsonResult({ books }));
-    expect(text.length).toBeLessThanOrEqual(400_000 + 1000);
-    expect(text).toContain('… (truncated');
+    expect(() => jsonResult({ books })).toThrow(ResultTooLargeError);
+    expect(() => jsonResult({ books })).toThrow(/Narrow the request/);
   });
 });
 

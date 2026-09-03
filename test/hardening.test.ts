@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 
 import { bookEntryXml, connect, feedXml, stubCalibreWeb } from './helpers.js';
 
@@ -156,6 +155,56 @@ describe('untrusted content handling', () => {
     })) as CallToolResult;
     expect(firstText(result)).not.toContain('\u001b');
     expect(firstText(result)).toContain('Bad');
+  });
+
+  it('strips them from every field, not only the ones that are decoded', async () => {
+    /*
+     * The test above put the control character in `<title>` — which is the one
+     * field that was already clean, because it goes through decodeXmlText. Four
+     * fields did not: `uuid`, `published`, `updated` and a format's `mimeType`
+     * reached the model verbatim, so the assurance in decodeXmlText's docstring
+     * did not hold for them.
+     *
+     * None of these look like free text, which is why they were missed. `uuid`
+     * is a plain TEXT column in Calibre and an imported `metadata.db` fills it
+     * with whatever it likes; the two dates and the mime type are whatever the
+     * feed says they are. U+202E reorders the display of everything after it,
+     * which is the whole Trojan-Source trick.
+     */
+    // Written as escapes because they are invisible in a source file, and
+    // chosen from what XML 1.0 actually permits — ESC would make the fixture
+    // itself ill-formed and prove nothing about this code.
+    const RLO = '\u202e';
+    const DEL = '\u007f';
+    const CSI = '\u009b';
+    const LRO = '\u202d';
+
+    stubCalibreWeb({
+      '/opds/new': {
+        body: feedXml([
+          bookEntryXml({
+            uuid: `aaaa${RLO}bbbb`,
+            published: `2020-05-01${DEL}`,
+            updated: `2024-01-02${CSI}`,
+            formats: [{ format: 'EPUB', mime: `application/epub+zip${LRO}` }],
+          }),
+        ]),
+      },
+    });
+    const client = await connect();
+    const text = firstText(
+      (await client.callTool({
+        name: 'list_books',
+        arguments: {},
+      })) as CallToolResult
+    );
+
+    for (const unsafe of [RLO, DEL, CSI, LRO]) {
+      expect(text).not.toContain(unsafe);
+    }
+    // The surrounding values survive: this strips, it does not drop the field.
+    expect(text).toContain('aaaabbbb');
+    expect(text).toContain('application/epub+zip');
   });
 
   it('redacts credentials from hrefs before they reach the model', async () => {
