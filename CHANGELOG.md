@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The advertised schemas avoid a spelling that is legal JSON Schema and still
+  gets a tool refused, or its constraint silently dropped, by some MCP clients:
+  a nullable field is written as `anyOf` branches rather than `"type":
+["string", "null"]`, which several clients read as a single type and then
+  drop. What the tools accept and return is unchanged; only the way the schema
+  says so is.
+
 - A result that is still over the ceiling after book summaries are dropped is
   now an **error** rather than JSON cut at the ceiling. The truncated form was
   unparseable, which a text block tolerates and `structuredContent` cannot —

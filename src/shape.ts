@@ -117,8 +117,8 @@ export const shapedBook = z.object({
    */
   id: z
     .number()
-    .nullable()
-    .describe('Pass to get_cover. Null when the entry carries neither link.'),
+    .describe('Pass to get_cover. Null when the entry carries neither link.')
+    .nullable(),
   uuid: z.string().optional(),
   title: z.string().describe('Empty string when the entry has no title.'),
   authors: z.array(z.string()).optional(),
@@ -150,10 +150,8 @@ export type ShapedBook = z.infer<typeof shapedBook>;
 export const shapedNavItem = z.object({
   id: z
     .number()
-    .nullable()
-    .describe(
-      'Pass to get_shelf_books. Null when the entry has no numeric id.'
-    ),
+    .describe('Pass to get_shelf_books. Null when the entry has no numeric id.')
+    .nullable(),
   name: z.string(),
   isPublic: z
     .literal(true)
