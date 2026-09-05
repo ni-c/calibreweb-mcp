@@ -8,6 +8,7 @@
 [![container](https://img.shields.io/badge/ghcr.io-ni--c%2Fcalibreweb--mcp-blue)](https://github.com/ni-c/calibreweb-mcp/pkgs/container/calibreweb-mcp)
 [![docs](https://img.shields.io/badge/docs-calibreweb--mcp.ni--c.de-informational)](https://calibreweb-mcp.ni-c.de)
 [![HTTP • via mcp-hub](https://img.shields.io/badge/HTTP-via%20mcp--hub-6f42c1)](https://mcp-hub.ni-c.de)
+[![Glama](https://glama.ai/mcp/servers/ni-c/calibreweb-mcp/badges/score.svg)](https://glama.ai/mcp/servers/ni-c/calibreweb-mcp)
 [![sponsor](https://img.shields.io/badge/sponsor-ni--c-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ni-c)
 
 A read-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for
