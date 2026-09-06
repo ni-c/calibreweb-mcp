@@ -567,18 +567,16 @@ export function decodeXmlText(text: string): string {
  * and only the first few thousand characters can possibly survive the limit.
  * The factor leaves room for markup that strips away to nothing.
  */
-export function htmlToText(
-  html: string,
-  limit: number
-): { text: string; truncated: boolean } {
-  const slice = html.slice(0, limit * 12 + 4096);
-
-  // Tag removal runs to a fixpoint: a single pass would let overlapping
-  // constructs reassemble markup — `<<script>script>` becomes `<script>` after
-  // one round. The output is plain text for a model, but an MCP client
-  // rendering it as markdown could interpret leftover HTML, so no fragment may
-  // survive. Bounded, since each round strictly shortens the string.
-  let stripped = slice
+/**
+ * Takes the markup out, to a fixpoint.
+ *
+ * A single pass would let overlapping constructs reassemble — `<<script>script>`
+ * becomes `<script>` after one round. The output is plain text for a model, but
+ * an MCP client rendering it as markdown could interpret leftover HTML, so no
+ * tag may survive. Bounded, since each round strictly shortens the string.
+ */
+function stripMarkup(html: string): string {
+  let stripped = html
     // Script and style bodies are markup, not description text.
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)>/gi, '\n')
@@ -588,9 +586,26 @@ export function htmlToText(
     if (next === stripped) break;
     stripped = next;
   }
+  return stripped;
+}
+
+export function htmlToText(
+  html: string,
+  limit: number
+): { text: string; truncated: boolean } {
+  const slice = html.slice(0, limit * 12 + 4096);
+
+  // Entities decode to whatever they name, angle brackets included, and that
+  // happened once the tag pass was already over — so `&lt;script&gt;` in a feed
+  // arrived as literal `<script>` in text an MCP client may render as markdown.
+  // Stripping again afterwards is what closes it. Decoding runs exactly once,
+  // so the second pass is the last one needed: doubly encoded text stays the
+  // text it is.
+  const stripped = stripMarkup(
+    stripMarkup(slice).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, decodeEntity)
+  );
 
   const text = stripped
-    .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, decodeEntity)
     // Raw unsafe characters present in the source markup, not just the numeric
     // entities handled in decodeEntity. Tab and newline survive, they are real
     // formatting.
