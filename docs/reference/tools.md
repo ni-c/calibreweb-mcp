@@ -57,6 +57,8 @@ Book-listing tools return entries of this shape (absent fields are omitted):
 
 ## search_books
 
+**essential**
+
 Searches the library by title, author, series, publisher and tags.
 
 | Parameter | Type | Description |
@@ -69,6 +71,8 @@ client-side; `totalFound` reports the real match count and `truncated` says
 whether the cap applied.
 
 ## list_books
+
+**essential**
 
 Book listings by view.
 
@@ -86,6 +90,8 @@ title.
 
 ## list_shelves
 
+**essential**
+
 Lists the shelves visible to the configured user: every public shelf plus the
 user's own private ones.
 
@@ -98,6 +104,8 @@ English-locale instances — Calibre-Web marks public shelves with a localized
 title suffix.
 
 ## get_shelf_books
+
+**essential**
 
 The books on a shelf, in the shelf's own order.
 
@@ -124,6 +132,8 @@ refused to protect the context window — use the book's `coverUrl` out-of-band
 instead. Only JPEG, PNG, GIF and WebP pass through.
 
 ## get_stats
+
+**essential**
 
 No parameters. Returns the library totals:
 
