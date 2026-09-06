@@ -121,7 +121,11 @@ describe('link absolutisation refuses everything off-origin', () => {
       fc.property(fc.webPath(), (path) => {
         const resolved = absolutize(`${BASE}${path}`, BASE);
         if (resolved === undefined) return;
-        expect(resolved.startsWith(BASE)).toBe(true);
+        // Compared as a parsed origin, not with `startsWith`: a prefix test
+        // would also accept `https://library.example.com.evil.net/`, which is
+        // exactly the bypass `absolutize` exists to refuse — and asserting it
+        // the weak way would let the function regress into allowing it.
+        expect(new URL(resolved).origin).toBe(BASE);
         expect(redactUrlCredentials(resolved)).toBe(resolved);
       }),
       RUNS
