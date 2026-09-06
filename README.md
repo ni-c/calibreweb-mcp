@@ -1,6 +1,7 @@
 # calibreweb-mcp
 
 [![CI](https://img.shields.io/github/actions/workflow/status/ni-c/calibreweb-mcp/ci.yml?branch=main&label=CI)](https://github.com/ni-c/calibreweb-mcp/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ni-c/calibreweb-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/ni-c/calibreweb-mcp)
 [![npm version](https://img.shields.io/npm/v/calibreweb-mcp)](https://www.npmjs.com/package/calibreweb-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/calibreweb-mcp)](https://www.npmjs.com/package/calibreweb-mcp)
 [![node](https://img.shields.io/node/v/calibreweb-mcp)](https://nodejs.org)
