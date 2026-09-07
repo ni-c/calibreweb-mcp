@@ -28,14 +28,20 @@ ENV NODE_ENV=production
 # image ships the fix.
 RUN apk add --no-cache --upgrade libcrypto3 libssl3
 
-# npm is not needed at runtime, and removing it keeps the Trivy gate in CI
-# strict without an ignore list for npm's vendored dependencies.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# No package manager is needed at runtime, and removing them keeps the Trivy
+# gate in CI strict without an ignore list for their vendored dependencies.
+# The base image ships three, not one: npm, yarn (in /opt) and corepack — only
+# npm was being removed here. Verify after a build with
+# `docker run --rm --entrypoint sh <image> -c 'ls /opt; which yarn npm npx corepack'`.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/lib/node_modules/corepack /usr/local/bin/corepack \
+    /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-# The server reports its version from package.json at runtime.
-COPY package.json package-lock.json ./
+# The server reports its version from package.json at runtime. The lockfile is
+# not read at runtime by anything and used to be copied in beside it.
+COPY package.json ./
 
 # Ownership proof for the MCP Registry: must match server.json's name exactly.
 LABEL io.modelcontextprotocol.server.name="io.github.ni-c/calibreweb-mcp"

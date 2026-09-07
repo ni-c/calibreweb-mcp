@@ -30,6 +30,19 @@ jobs:
           jq -r '.packages[] | "\(.registryType) \(.identifier) \(.version // "-")"' server.json
       - name: Install mcp-publisher
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          version=v1.8.1
+          case "$(uname -m)" in
+            x86_64) arch=amd64; sha=a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc ;;
+            aarch64) arch=arm64; sha=8dd75a6cf6845688b5d4e46df58d3ca26d5c8d233bb0626606e1db82c5e883e4 ;;
+            *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
+          esac
+          # Pinned to a tag with its published checksum: this job holds an OIDC
+          # token, and `releases/latest/download` runs whatever upstream serves
+          # on the day of the release.
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$version/mcp-publisher_linux_$arch.tar.gz"
+          echo "$sha  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          rm mcp-publisher.tar.gz
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish

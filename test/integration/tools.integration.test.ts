@@ -141,9 +141,18 @@ describe('covers', () => {
     const result = await harness.raw('get_cover', { book_id: id });
     const image = result.content?.find((part) => part.type === 'image');
     expect(image).toBeDefined();
-    expect(image!.mimeType).toMatch(/^image\//);
-    expect(Buffer.from(image!.data ?? '', 'base64').byteLength).toBeGreaterThan(
-      0
+    const bytes = Buffer.from(image!.data ?? '', 'base64');
+    expect(bytes.byteLength).toBeGreaterThan(0);
+
+    // The type comes from the data, and this is the case that says why. Every
+    // cover file in a Calibre library is called `cover.jpg` whatever the image
+    // is — the fixtures here are PNG under that name — and Calibre-Web serves
+    // it with `send_from_directory`, so the header says `image/jpeg`. A server
+    // that believed the header would report the wrong type here, and a server
+    // that demanded header and data agree would refuse a legitimate cover.
+    expect(image!.mimeType).toBe('image/png');
+    expect(bytes.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     );
   });
 });

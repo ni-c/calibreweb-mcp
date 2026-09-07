@@ -289,7 +289,22 @@ describe('list_books', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects a multi-character letter without fetching', async () => {
+  it('rejects a two-character letter without fetching', async () => {
+    // Two characters get past the schema's ceiling and are refused by the
+    // letter rule itself, which is the branch worth pinning: `00` is the one
+    // two-character value Calibre-Web has a route for.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const client = await connect();
+    const result = (await client.callTool({
+      name: 'list_books',
+      arguments: { view: 'all', letter: 'AB' },
+    })) as CallToolResult;
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain('invalid letter');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a long letter at the schema, without fetching', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const client = await connect();
     const result = (await client.callTool({
@@ -297,7 +312,6 @@ describe('list_books', () => {
       arguments: { view: 'all', letter: '../etc' },
     })) as CallToolResult;
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain('invalid letter');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

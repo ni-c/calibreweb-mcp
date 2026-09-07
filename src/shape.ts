@@ -188,6 +188,55 @@ export interface ShapedFeed {
   pagination: Pagination;
 }
 
+/** U+FFFD, built from its code point so no editing tool can turn it into bytes. */
+const REPLACEMENT = String.fromCodePoint(0xfffd);
+
+/** The truncation marker, also built from its code point rather than typed. */
+const ELLIPSIS = String.fromCodePoint(0x2026);
+
+/**
+ * Every string that leaves this module, after every `slice`.
+ *
+ * A cut at a character budget can land between the halves of a surrogate pair —
+ * a title ending in an emoji is enough — and the lone half is legal JSON that a
+ * client encoding to UTF-8 cannot represent. `toWellFormed` replaces exactly
+ * those halves and leaves everything else byte-identical.
+ */
+function wellFormed(text: string): string {
+  return text.toWellFormed();
+}
+
+/**
+ * Ceiling on a single metadata field, in characters.
+ *
+ * Calibre keeps every one of these in a free-text column and an imported
+ * `metadata.db` can carry anything. A megabyte title made every listing that
+ * paged over it unanswerable — the result ceiling refuses rather than shortens
+ * once summaries are gone — so one entry took out the tool for a whole range of
+ * offsets. A thousand characters is far past any real title, author or tag.
+ */
+export const MAX_FIELD_CHARS = 1000;
+
+/** Ceilings on how many of a repeated field one entry may contribute. */
+const MAX_AUTHORS = 50;
+const MAX_TAGS = 100;
+const MAX_LANGUAGES = 20;
+const MAX_FORMATS = 20;
+
+/** A URL past this is not a link anyone can follow; it is a payload. */
+const MAX_URL_CHARS = 2048;
+
+/** Calibre ids are SQLite rowids served over routes that parse an int32. */
+const MAX_ID = 2_147_483_647;
+
+const FIELD_TRUNCATED_NOTE = `Some metadata fields were longer than ${MAX_FIELD_CHARS} characters and were truncated.`;
+const LIST_TRUNCATED_NOTE =
+  'Some entries listed more authors, tags, languages or formats than are reported here; the extras were dropped.';
+const UNUSABLE_NEXT_NOTE =
+  'The feed offered a next page under an offset this server cannot use, so pagination stops here. Narrow the request instead.';
+const UNUSABLE_ID_NOTE =
+  'Some ids in the feed were not usable numeric ids — too long, or past the range Calibre-Web accepts — and are reported as null.';
+
 // C0/C1 controls, DEL, and BiDi override/isolate characters: all of them reach
 // the model — and any terminal rendering the output — verbatim otherwise, and
 // the BiDi set is the Trojan-Source display-spoofing primitive.
@@ -236,7 +285,7 @@ export function shapeFeed(
     warnings.add(UNTRUSTED_CONTENT_NOTE);
   }
 
-  const nextOffset = nextOffsetFromLinks(feed.link ?? []);
+  const nextOffset = nextOffsetFromLinks(feed.link ?? [], warnings);
   const page: Pagination = {
     offset,
     hasMore: nextOffset !== undefined,
@@ -266,7 +315,7 @@ function shapeBookEntry(
     (l) => l['@_rel'] === OPDS_REL_ACQUISITION
   );
 
-  const id = bookIdFromLinks(links);
+  const id = bookIdFromLinks(links, warnings);
   if (id === null) {
     warnings.add(
       'Some books carry no numeric id: their entries have neither a cover nor a download link, so get_cover is unavailable for them.'
@@ -275,10 +324,14 @@ function shapeBookEntry(
 
   const droppedHref = (): void =>
     warnings.add(
-      'Some feed links did not resolve to the configured Calibre-Web origin (or used a non-http scheme) and were dropped.'
+      'Some feed links were dropped: they did not resolve to the configured Calibre-Web origin, used a non-http scheme, or were longer than 2048 characters.'
     );
 
-  const formats: ShapedFormat[] = acquisitionLinks.map((link) => {
+  const formats: ShapedFormat[] = capList(
+    acquisitionLinks,
+    MAX_FORMATS,
+    warnings
+  ).map((link) => {
     const size = Number(link['@_length']);
     const format = optionalText(link['@_title']);
     const mimeType = optionalText(link['@_type']);
@@ -290,29 +343,42 @@ function shapeBookEntry(
       droppedHref();
     }
     return {
-      ...(format !== undefined ? { format: decodeXmlText(format) } : {}),
-      ...(mimeType !== undefined ? { mimeType } : {}),
-      ...(Number.isFinite(size) && size > 0 ? { size } : {}),
+      ...(format !== undefined ? { format: cleanField(format, warnings) } : {}),
+      ...(mimeType !== undefined
+        ? { mimeType: cleanField(mimeType, warnings) }
+        : {}),
+      ...(Number.isSafeInteger(size) && size > 0 ? { size } : {}),
       ...(downloadUrl !== undefined ? { downloadUrl } : {}),
     };
   });
 
-  const languages = (entry['dcterms:language'] ?? [])
-    .filter((l): l is string => typeof l === 'string' && l !== '')
-    .map(decodeXmlText);
-  const tags = (entry.category ?? [])
-    .map((c) => c['@_label'] ?? c['@_term'])
-    .filter((t): t is string => typeof t === 'string' && t !== '')
-    .map(decodeXmlText);
-  const authors = (entry.author ?? [])
-    .map((a) => a.name)
-    .filter((n): n is string => typeof n === 'string' && n !== '')
-    .map(decodeXmlText);
+  const languages = capList(
+    (entry['dcterms:language'] ?? []).filter(
+      (l): l is string => typeof l === 'string' && l !== ''
+    ),
+    MAX_LANGUAGES,
+    warnings
+  ).map((l) => cleanField(l, warnings));
+  const tags = capList(
+    (entry.category ?? [])
+      .map((c) => c['@_label'] ?? c['@_term'])
+      .filter((t): t is string => typeof t === 'string' && t !== ''),
+    MAX_TAGS,
+    warnings
+  ).map((t) => cleanField(t, warnings));
+  const authors = capList(
+    (entry.author ?? [])
+      .map((a) => a.name)
+      .filter((n): n is string => typeof n === 'string' && n !== ''),
+    MAX_AUTHORS,
+    warnings
+  ).map((a) => cleanField(a, warnings));
 
   const content = contentText(entry.content);
   const { rating, series, summary, summaryTruncated } = parseContentBlob(
     content,
-    budget
+    budget,
+    warnings
   );
   if (summaryTruncated) {
     warnings.add(
@@ -346,11 +412,15 @@ function shapeBookEntry(
 
   return {
     id,
-    ...(uuid !== undefined ? { uuid } : {}),
-    title: title !== undefined ? decodeXmlText(title) : '',
+    ...(uuid !== undefined ? { uuid: cleanField(uuid, warnings) } : {}),
+    title: title !== undefined ? cleanField(title, warnings) : '',
     ...(authors.length > 0 ? { authors } : {}),
-    ...(publisher !== undefined ? { publisher: decodeXmlText(publisher) } : {}),
-    ...(published !== undefined ? { published } : {}),
+    ...(publisher !== undefined
+      ? { publisher: cleanField(publisher, warnings) }
+      : {}),
+    ...(published !== undefined
+      ? { published: cleanField(published, warnings) }
+      : {}),
     ...(languages.length > 0 ? { languages } : {}),
     ...(tags.length > 0 ? { tags } : {}),
     ...(series !== undefined ? { series } : {}),
@@ -358,7 +428,9 @@ function shapeBookEntry(
     ...(summary !== undefined ? { summary } : {}),
     ...(coverUrl !== undefined ? { coverUrl } : {}),
     formats,
-    ...(updated !== undefined ? { updated } : {}),
+    ...(updated !== undefined
+      ? { updated: cleanField(updated, warnings) }
+      : {}),
   };
 }
 
@@ -377,16 +449,18 @@ function shapeNavEntry(
 
   // The numeric id is the trailing path segment of the subsection href,
   // e.g. `/opds/shelf/3`. Non-numeric ids (the formats index) are out of
-  // scope for this server's tools.
-  const match = /\/(\d+)\/?$/.exec(href);
-  const id = match?.[1] !== undefined ? Number(match[1]) : null;
+  // scope for this server's tools. The digit run is bounded: `Number` on an
+  // unbounded one answers `1e20` or `Infinity`, and `get_shelf_books` refuses
+  // both — so an id nobody can use would be reported as one.
+  const match = /\/([0-9]{1,10})\/?$/.exec(href);
+  const id = match?.[1] !== undefined ? numericId(match[1]) : null;
   if (id === null) {
     warnings.add(
       'Some list entries carry no numeric id and cannot be opened with the *_books tools.'
     );
   }
 
-  const name = decodeXmlText(entry.title);
+  const name = cleanField(entry.title, warnings);
   const isPublic = PUBLIC_SHELF_SUFFIX.test(name);
   return {
     id,
@@ -397,24 +471,65 @@ function shapeNavEntry(
   };
 }
 
-/** Numeric book id out of the cover or download link hrefs. */
-export function bookIdFromLinks(links: RawLink[]): number | null {
+/**
+ * Numeric book id out of the cover or download link hrefs.
+ *
+ * The digit run is bounded by the pattern rather than read whole and handed to
+ * `Number`: twenty digits answer `1e20` and four hundred answer `Infinity`,
+ * both of which `shapedBook.id` (`z.number()`) and `get_cover`'s input schema
+ * refuse — the SDK then fails the *whole* listing over one entry. An id that
+ * cannot be used is null, which the shape already means.
+ */
+export function bookIdFromLinks(
+  links: RawLink[],
+  warnings?: Notes
+): number | null {
+  let sawUnusable = false;
   for (const link of links) {
     const href = link['@_href'];
     if (href === undefined) continue;
-    const match = /\/opds\/(?:cover|download)\/(\d+)(?:\/|$)/.exec(href);
-    if (match?.[1] !== undefined) return Number(match[1]);
+    const match = /\/opds\/(?:cover|download)\/([0-9]{1,10})(?:\/|$)/.exec(
+      href
+    );
+    if (match?.[1] !== undefined) {
+      const id = numericId(match[1]);
+      if (id !== null) return id;
+      sawUnusable = true;
+    } else if (/\/opds\/(?:cover|download)\/[0-9]/.test(href)) {
+      sawUnusable = true;
+    }
   }
+  if (sawUnusable) warnings?.add(UNUSABLE_ID_NOTE);
   return null;
 }
 
-/** `nextOffset` out of the feed's `rel="next"` pagination link. */
-export function nextOffsetFromLinks(links: RawLink[]): number | undefined {
+/**
+ * `nextOffset` out of the feed's `rel="next"` pagination link.
+ *
+ * `pagination.nextOffset` is `z.number().int()`, which is a promise about a
+ * value the instance chose: an unbounded digit run reaches it as `1e20` or
+ * `Infinity` and the answer fails validation as a whole. An offset that is not
+ * a usable one means there is no next page to offer.
+ */
+export function nextOffsetFromLinks(
+  links: RawLink[],
+  warnings?: Notes
+): number | undefined {
   const next = links.find((l) => l['@_rel'] === 'next');
   const href = next?.['@_href'];
   if (href === undefined) return undefined;
-  const match = /[?&]offset=(\d+)/.exec(decodeXmlText(href));
-  return match?.[1] !== undefined ? Number(match[1]) : undefined;
+  if (href.length > MAX_URL_CHARS) {
+    warnings?.add(UNUSABLE_NEXT_NOTE);
+    return undefined;
+  }
+  const decoded = decodeXmlText(href);
+  const match = /[?&]offset=([0-9]{1,10})(?![0-9])/.exec(decoded);
+  const offset = match?.[1] !== undefined ? numericId(match[1]) : null;
+  if (offset === null) {
+    if (/[?&]offset=[0-9]/.test(decoded)) warnings?.add(UNUSABLE_NEXT_NOTE);
+    return undefined;
+  }
+  return offset;
 }
 
 /**
@@ -429,8 +544,13 @@ export function nextOffsetFromLinks(links: RawLink[]): number | undefined {
  * URLs into the model context as legitimate-looking library links.
  */
 export function absolutize(href: string, baseUrl: string): string | undefined {
+  // A href past this is not a link anybody follows; it is a payload riding in
+  // a field the model reads. The feed ceiling alone would allow megabytes of
+  // it, once per entry.
+  if (href.length > MAX_URL_CHARS) return undefined;
   try {
     const resolved = new URL(decodeXmlText(href), `${baseUrl}/`);
+    if (resolved.href.length > MAX_URL_CHARS) return undefined;
     if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') {
       return undefined;
     }
@@ -465,7 +585,8 @@ interface ParsedContent {
  */
 export function parseContentBlob(
   content: string,
-  budget: { left: number }
+  budget: { left: number },
+  warnings: Notes = new Notes()
 ): ParsedContent {
   if (content === '') return { summaryTruncated: false };
 
@@ -492,7 +613,7 @@ export function parseContentBlob(
     // formatfloat renders the index with the locale decimal separator.
     const index = Number(seriesMatch[2]?.replace(',', '.'));
     series = {
-      name: seriesMatch[1],
+      name: cleanField(seriesMatch[1], warnings),
       ...(Number.isFinite(index) ? { index } : {}),
     };
   }
@@ -512,7 +633,11 @@ export function parseContentBlob(
 
   const limit = Math.min(SUMMARY_CHARS, Math.max(budget.left, 0));
   const truncated = body.length > limit;
-  const summary = truncated ? `${body.slice(0, limit)}…` : body;
+  // `wellFormed` after the cut: a summary ending in an emoji would otherwise
+  // leave half a surrogate pair at the boundary.
+  const summary = truncated
+    ? wellFormed(body.slice(0, limit)) + ELLIPSIS
+    : wellFormed(body);
   budget.left -= summary.length;
   return {
     ...(rating !== undefined ? { rating } : {}),
@@ -561,32 +686,182 @@ export function decodeXmlText(text: string): string {
 }
 
 /**
+ * A display field on its way out: entities decoded, unsafe characters gone,
+ * cut to {@link MAX_FIELD_CHARS}, well-formed after the cut.
+ *
+ * One funnel rather than a rule to remember per field, for the same reason
+ * {@link optionalText} strips in one place: the fields that get forgotten are
+ * the ones nobody thought of as text.
+ */
+function cleanField(value: string, warnings: Notes): string {
+  const decoded = decodeXmlText(value);
+  if (decoded.length <= MAX_FIELD_CHARS) return wellFormed(decoded);
+  warnings.add(FIELD_TRUNCATED_NOTE);
+  return wellFormed(decoded.slice(0, MAX_FIELD_CHARS)) + ELLIPSIS;
+}
+
+/** Cuts a list to `max`, noting once that something was dropped. */
+function capList<T>(values: T[], max: number, warnings: Notes): T[] {
+  if (values.length <= max) return values;
+  warnings.add(LIST_TRUNCATED_NOTE);
+  return values.slice(0, max);
+}
+
+/**
+ * The numeric id a feed href carries, or null when it is not one.
+ *
+ * The digit run is bounded by the pattern that finds it, so `Number` can only
+ * answer a finite value here; the safe-integer and range checks are what keep
+ * an id the output schema (and `get_cover`'s input schema) would refuse from
+ * ever being offered as one.
+ */
+function numericId(digits: string): number | null {
+  const value = Number(digits);
+  if (!Number.isSafeInteger(value) || value < 0 || value > MAX_ID) return null;
+  return value;
+}
+
+/**
  * Converts the content HTML into plain text, bounded by `limit`.
  *
  * The input is sliced before parsing: a description can be arbitrarily long
  * and only the first few thousand characters can possibly survive the limit.
  * The factor leaves room for markup that strips away to nothing.
  */
+/** Closing tags that end a block and therefore become a line break. */
+const BLOCK_TAGS = new Set([
+  'p',
+  'div',
+  'li',
+  'tr',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+]);
+
+/** ASCII-only, index-stable case-insensitive comparison at a position. */
+function matchesAt(text: string, at: number, word: string): boolean {
+  if (at + word.length > text.length) return false;
+  for (let k = 0; k < word.length; k += 1) {
+    const c = text.charCodeAt(at + k) | 0x20;
+    if (c !== word.charCodeAt(k)) return false;
+  }
+  return true;
+}
+
+/** Reads the ASCII tag name at `lt` (`<` or `</`), lower-cased. */
+function tagNameAt(
+  text: string,
+  lt: number
+): { name: string; closing: boolean } {
+  let i = lt + 1;
+  const closing = text[i] === '/';
+  if (closing) i += 1;
+  let name = '';
+  for (; i < text.length; i += 1) {
+    const c = text.charCodeAt(i);
+    const isAlpha = (c | 0x20) >= 97 && (c | 0x20) <= 122;
+    const isDigit = c >= 48 && c <= 57;
+    if (!isAlpha && !isDigit) break;
+    name += text[i];
+  }
+  return { name: name.toLowerCase(), closing };
+}
+
 /**
- * Takes the markup out, to a fixpoint.
+ * Takes the markup out, in one forward pass.
  *
- * A single pass would let overlapping constructs reassemble — `<<script>script>`
- * becomes `<script>` after one round. The output is plain text for a model, but
- * an MCP client rendering it as markdown could interpret leftover HTML, so no
- * tag may survive. Bounded, since each round strictly shortens the string.
+ * This used to re-run `replace(/<[^>]+>/g, '')` until the string stopped
+ * changing, because a single `replace` lets overlapping constructs reassemble:
+ * `<<script>script>` becomes `<script>` after one round. Re-running it is
+ * quadratic — the regex rescans the whole remaining string per round, and a run
+ * of `<` with no `>` behind it buys one round per character. 16 096 of them,
+ * which is exactly what the content slice admits, cost 168 ms *per book*, from
+ * anybody who can write a description into the library.
+ *
+ * The scan below is linear and needs no second round, because it never removes
+ * a `<` that could pair up with a later `>`: an element is consumed whole (from
+ * its `<` to the first `>`), a `<` with no `>` after it anywhere is kept
+ * verbatim as the text it is, and `<>` — which is not an element, the old
+ * pattern needed one character in between — is kept as well. Nothing that
+ * leaves this function can therefore be reassembled into an element by
+ * deleting more of it. Every removal emits a separator, so two halves either
+ * side of a dropped element cannot become one token (a rule this fleet learned
+ * from an attribute removal that manufactured an `<img src=…>`).
+ *
+ * `htmlToText` still calls it twice, before and after entity decoding, because
+ * decoding can *introduce* markup. Twice is a counted number of passes, not a
+ * loop to a fixpoint.
  */
 function stripMarkup(html: string): string {
-  let stripped = html
-    // Script and style bodies are markup, not description text.
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n');
-  for (;;) {
-    const next = stripped.replace(/<[^>]+>/g, '');
-    if (next === stripped) break;
-    stripped = next;
+  const out: string[] = [];
+  let i = 0;
+  while (i < html.length) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) {
+      out.push(html.slice(i));
+      break;
+    }
+    out.push(html.slice(i, lt));
+
+    const gt = html.indexOf('>', lt + 1);
+    if (gt === -1) {
+      // No `>` anywhere after this `<`: it is text, and no later deletion can
+      // turn it into an element. Keeping it verbatim is what makes one pass
+      // enough.
+      out.push(html.slice(lt));
+      break;
+    }
+    if (gt === lt + 1) {
+      // `<>` is not an element — `<[^>]+>` requires a character in between.
+      out.push('<>');
+      i = lt + 2;
+      continue;
+    }
+
+    const { name, closing } = tagNameAt(html, lt);
+    if (!closing && (name === 'script' || name === 'style')) {
+      // Script and style bodies are markup, not description text.
+      out.push(' ');
+      i = skipToClose(html, gt + 1, name);
+      continue;
+    }
+    if (closing && BLOCK_TAGS.has(name)) {
+      out.push('\n');
+      i = gt + 1;
+      continue;
+    }
+    if (!closing && name === 'br') {
+      out.push('\n');
+      i = gt + 1;
+      continue;
+    }
+    out.push(' ');
+    i = gt + 1;
   }
-  return stripped;
+  return out.join('');
+}
+
+/**
+ * Index just past `</name …>`, or the end of the document when it never
+ * closes. Only ever called on a region that is then consumed, so the whole
+ * scan stays linear in the document.
+ */
+function skipToClose(html: string, from: number, name: string): number {
+  let i = from;
+  for (;;) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) return html.length;
+    if (html[lt + 1] === '/' && matchesAt(html, lt + 2, name)) {
+      const gt = html.indexOf('>', lt + 2);
+      return gt === -1 ? html.length : gt + 1;
+    }
+    i = lt + 1;
+  }
 }
 
 export function htmlToText(
@@ -616,9 +891,12 @@ export function htmlToText(
     .trim();
   if (text.length <= limit) {
     // Only genuinely complete when the slice covered the whole input.
-    return { text, truncated: slice.length < html.length };
+    return { text: wellFormed(text), truncated: slice.length < html.length };
   }
-  return { text: `${text.slice(0, limit)}…`, truncated: true };
+  return {
+    text: wellFormed(text.slice(0, limit)) + ELLIPSIS,
+    truncated: true,
+  };
 }
 
 // A null-prototype map: entity names are attacker-chosen lookup keys, and on a
@@ -657,6 +935,11 @@ function decodeEntity(match: string, entity: string): string {
     ) {
       return ' ';
     }
+    // A surrogate is half a character, and `String.fromCodePoint` hands one
+    // over without complaint: the range check above let it through, and a lone
+    // surrogate is legal JSON on the wire that raises `UnicodeEncodeError` in
+    // a client encoding the text to UTF-8. It is not a character.
+    if (code >= 0xd800 && code <= 0xdfff) return REPLACEMENT;
     return String.fromCodePoint(code);
   }
   return NAMED_ENTITIES[entity.toLowerCase()] ?? match;

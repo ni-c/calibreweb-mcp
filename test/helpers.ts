@@ -4,6 +4,15 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import type { Config } from '../src/config.js';
 import { createServer } from '../src/server.js';
 
+/**
+ * What `globalThis.fetch` accepts here.
+ *
+ * Not `RequestInfo`: that name comes from the DOM library, which tsconfig no
+ * longer pulls in — `lib` was set for `String#toWellFormed` and setting it at
+ * all drops the default DOM. Node's own signature is the honest one anyway.
+ */
+export type FetchInput = Parameters<typeof fetch>[0];
+
 export const BASE_URL = 'https://books.example.net';
 
 export const testConfig: Config = {
@@ -52,33 +61,31 @@ export function stubCalibreWeb(routes: Routes = {}): FetchStub {
   const calls: RecordedCall[] = [];
   const spy = vi
     .spyOn(globalThis, 'fetch')
-    .mockImplementation(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        const parsed = new URL(url);
-        const call: RecordedCall = {
-          url,
-          path: parsed.pathname,
-          query: parsed.searchParams,
-          method: init?.method ?? 'GET',
-          headers: (init?.headers as Record<string, string>) ?? {},
-        };
-        calls.push(call);
+    .mockImplementation(async (input: FetchInput, init?: RequestInit) => {
+      const url = String(input);
+      const parsed = new URL(url);
+      const call: RecordedCall = {
+        url,
+        path: parsed.pathname,
+        query: parsed.searchParams,
+        method: init?.method ?? 'GET',
+        headers: (init?.headers as Record<string, string>) ?? {},
+      };
+      calls.push(call);
 
-        const route = routes[parsed.pathname];
-        if (route === undefined) {
-          throw new Error(`stubCalibreWeb: unrouted path ${parsed.pathname}`);
-        }
-        const spec = typeof route === 'function' ? route(call) : route;
-        return new Response(new Uint8Array(Buffer.from(spec.body)), {
-          status: spec.status ?? 200,
-          headers: {
-            'content-type':
-              spec.contentType ?? 'application/atom+xml; charset=utf-8',
-          },
-        });
+      const route = routes[parsed.pathname];
+      if (route === undefined) {
+        throw new Error(`stubCalibreWeb: unrouted path ${parsed.pathname}`);
       }
-    );
+      const spec = typeof route === 'function' ? route(call) : route;
+      return new Response(new Uint8Array(Buffer.from(spec.body)), {
+        status: spec.status ?? 200,
+        headers: {
+          'content-type':
+            spec.contentType ?? 'application/atom+xml; charset=utf-8',
+        },
+      });
+    });
   return { spy, calls };
 }
 
@@ -93,6 +100,12 @@ export async function connect(
     client.connect(clientTransport),
     server.connect(serverTransport),
   ]);
+  // Listing once, here, is what makes every `callTool` in every suite run the
+  // client's own JSON-Schema check against the tool's declared output schema.
+  // Without it a closed schema and a result carrying one extra field agree in
+  // the server and disagree in every real client — on the success path only,
+  // which is the path the tests exercise.
+  await client.listTools();
   return client;
 }
 
@@ -206,10 +219,14 @@ ${entries.join('\n')}
 </feed>`;
 }
 
-/** A tiny valid JPEG-ish payload; content sniffing is not part of the server. */
+/**
+ * A payload that begins like a JPEG, because `get_cover` now checks that the
+ * bytes agree with the announced type. The rest is filler.
+ */
 export function jpegResponse(bytes = 64): RouteResponse {
-  return {
-    body: Buffer.alloc(bytes, 0xff),
-    contentType: 'image/jpeg',
-  };
+  const body = Buffer.alloc(Math.max(bytes, 3), 0x11);
+  body[0] = 0xff;
+  body[1] = 0xd8;
+  body[2] = 0xff;
+  return { body, contentType: 'image/jpeg' };
 }

@@ -32,6 +32,7 @@ export function registerShelfTools(
           .number()
           .int()
           .min(0)
+          .max(2_147_483_647)
           .optional()
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'
@@ -80,6 +81,7 @@ export function registerShelfTools(
           .number()
           .int()
           .min(0)
+          .max(2_147_483_647)
           .optional()
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'

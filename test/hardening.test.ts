@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CallToolResult } from '@modelcontextprotocol/server';
 
-import { bookEntryXml, connect, feedXml, stubCalibreWeb } from './helpers.js';
+import {
+  bookEntryXml,
+  connect,
+  feedXml,
+  stubCalibreWeb,
+  type FetchInput,
+} from './helpers.js';
 
 function firstText(result: CallToolResult): string {
   const block = result.content[0];
@@ -310,7 +316,7 @@ describe('transport hardening', () => {
   it('sends redirect error and a timeout signal on every request', async () => {
     let init: RequestInit | undefined;
     vi.spyOn(globalThis, 'fetch').mockImplementation(
-      async (_input: RequestInfo | URL, requestInit?: RequestInit) => {
+      async (_input: FetchInput, requestInit?: RequestInit) => {
         init = requestInit;
         return new Response(feedXml([]), {
           status: 200,

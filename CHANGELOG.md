@@ -7,19 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- #region changelog -->
 
-## [Unreleased]
+## [0.3.1] - 2026-09-07
 
-### Changed
+### Security
 
-- oxlint's `suspicious` category is on; 22 findings fixed (mostly
-  `Array#toSorted()` over copy-and-sort and un-shadowed names). No runtime
-  behaviour changed.
-- The tool reference marks the `essential` preset and the tools that ask a
-  person before they act, per tool rather than only in the introduction. A test
-  keeps both sets in step with the code.
-- `homepage` in `package.json` points at the documentation site rather than at
-  the README anchor on GitHub. It is what npm shows next to the package, and
-  every one of these servers has had a documentation site for weeks.
+- Markup is taken out of a book description in one forward pass instead of by
+  re-running a regular expression until the text stops changing. The old shape
+  was quadratic in the input: a run of unclosed `<` bought one full rescan per
+  character, and 16 096 of them — exactly what the content slice admits — cost
+  168 ms **per book**, on the thread that serves every request, from anybody
+  who can write a description into the library. A search answer carries
+  hundreds of books. The scan never removes a `<` that could pair up with a
+  later `>`, so one pass is the fixpoint by construction rather than by
+  repetition, and every removal emits a separator so two halves cannot become
+  one token. `test/linear-time.test.ts` holds it, and every other function that
+  reads feed or configuration text, to a budget at the largest input the code
+  accepts.
+- The status of a response is decided before its body is read. Every verb read
+  the body under the success ceiling first, so a 401 behind a reverse proxy
+  answering with a two-megabyte login page surfaced as "returned a response
+  larger than 1048576 bytes and was refused" — the size instead of the status,
+  no hint about the credentials, and none of the handling that keys on 401 ever
+  running. Error bodies now have their own 64 KiB ceiling that cuts instead of
+  refusing.
+- A refused login is remembered for ten seconds and repeated from memory rather
+  than retried. Calibre-Web logs every refused OPDS login at warning level —
+  `OPDS Login failed for user "%s" IP-address: %s`, the line intrusion
+  detection filters on — and does not rate-limit them: the limiter call in its
+  `verify_password` is commented out and the OPDS routes carry none. Every tool
+  here is annotated read-only, idempotent and cheap, which is what a model
+  retries after being told to check the credentials. The record is per process
+  and says when the next real attempt is possible.
+- A cover's media type is read from the image data instead of from the response
+  header, and data matching none of the four signatures is refused. An HTML
+  login page served with `image/png` reached the client as an image before.
+  Reading the data is also what makes the reported type correct: Calibre names
+  every cover file `cover.jpg` whatever the image is, and Calibre-Web guesses
+  the header from that name — the integration fixtures are PNG files under that
+  name, which is how a header-versus-data check was caught refusing legitimate
+  covers.
+- A character reference naming a surrogate decodes to U+FFFD, and every string
+  is repaired after every cut. `String.fromCodePoint(0xd800)` answers half a
+  character without complaining, and a summary or a field cut at its budget can
+  split a pair — legal JSON on the wire that raises `UnicodeEncodeError` in a
+  client encoding it to UTF-8.
+- Startup diagnostics no longer print the value of `CALIBRE_WEB_URL`. A value
+  that fails to parse is the one most likely to be a password pasted one line
+  too high, and redacting userinfo does nothing for a bare one; it is now
+  described by length unless it contains `://`. The scheme is no longer echoed
+  either — a 56-character hexadecimal key with a colon after it is a valid URL
+  whose scheme is the key.
+- The publish job installs with `--ignore-scripts`. It holds an OIDC token for
+  npm Trusted Publishing, and an install hook of any dependency would have run
+  while that token was available. `mcp-publisher` is pinned to v1.8.1 with its
+  published checksum instead of `releases/latest/download`, in both jobs that
+  hold a token, and `gh release create` verifies the tag.
+- Pull requests get a dependency review (`fail-on-severity: high`). `npm audit`
+  checks the tree as it is; this checks the change.
+- The runtime image drops yarn and corepack as well as npm, and no longer
+  carries `package-lock.json`, which nothing reads at runtime.
+
+### Fixed
+
+- An id the feed states can no longer take a whole listing down. `Number` on an
+  unbounded digit run answers `1e20` at twenty digits and `Infinity` at four
+  hundred; `shapedBook.id` is `z.number()` and `pagination.nextOffset` is
+  `z.number().int()`, both of which refuse those, and the SDK answers a schema
+  violation with an error for the _entire_ call — so one poisoned entry in a
+  page of fifty made every book in it unreachable, with a message naming no
+  cause. Ids are now read as at most ten digits and must be safe integers
+  inside the range Calibre-Web's own routes accept; anything else is reported
+  as no id, with a note. The same for the next-page offset, which stops
+  pagination rather than offering an offset nothing can use.
+- A counter from `/opds/stats` that is not finite is dropped rather than
+  answered. `typeof value === 'number'` was the whole check, and `1e999` in the
+  JSON parses to `Infinity`, which passes it and fails the output schema.
+- One entry can no longer make a listing unanswerable. A metadata field is cut
+  at 1000 characters and the authors, tags, languages and formats one entry
+  contributes are capped, each with a note; a link longer than 2048 characters
+  is dropped. The result ceiling drops summaries and then refuses, so a
+  megabyte title — which is not a summary — used to answer "narrow the request"
+  for every offset that paged over that book, and no narrowing helped.
+- The result ceiling measures the text that is actually sent. It measured the
+  compact serialisation and emitted the indented one, which is two to three
+  times as many characters, so the limit held for a string nobody received.
+- An upstream error body is labelled as untrusted text from the instance and
+  cut at 200 characters rather than 2000.
+- `CALIBRE_WEB_URL` is stored as the parsed origin and path rather than as the
+  environment string, so a query or fragment cannot be glued in front of every
+  request path; trailing slashes come off with an index walk rather than a
+  pattern that is retried from every position of the run.
 
 ### Added
 
@@ -32,16 +109,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after the fact — this is the channel a model sees before it calls anything.
 - An OpenSSF Scorecard run, weekly and on every push to `main`, reporting into
   the Security tab next to CodeQL and Trivy. The badge is the second in the row.
+- A property test drives every feed-reading tool through a connected client over
+  feeds built from hostile field values, and asserts that no answer carries
+  `Output validation error`, `Cannot read properties` or `is not a function`,
+  and that both channels always agree. It reproduced the id defect above on its
+  first run. `SHAPE_RUNS` raises the run count for a deep local pass.
+- The test client now calls `tools/list` once before every suite, so the
+  client-side schema check runs on every success path rather than only on the
+  paths a test happened to list on. A test drives the insecure-TLS switch,
+  which had never had one.
 
 ### Changed
 
+- oxlint's `suspicious` category is on; 22 findings fixed (mostly
+  `Array#toSorted()` over copy-and-sort and un-shadowed names). No runtime
+  behaviour changed.
+- The tool reference marks the `essential` preset and the tools that ask a
+  person before they act, per tool rather than only in the introduction. A test
+  keeps both sets in step with the code.
+- `homepage` in `package.json` points at the documentation site rather than at
+  the README anchor on GitHub. It is what npm shows next to the package, and
+  every one of these servers has had a documentation site for weeks.
 - Source maps are no longer published in the npm tarball. Node reads them only
   under `--enable-source-maps`, which nothing here sets, and the maps pointed at
   a `src/` this package does not ship — so a stack trace under that flag named a
   file nobody could open. `dist/**/*.js` is unchanged; the package is about a
   fifth smaller.
-
-[Unreleased]: https://github.com/ni-c/calibreweb-mcp/compare/v0.3.0...HEAD
+- `letter` and `offset` carry ceilings, and `tsconfig.json` targets the ES2024
+  library for `String#toWellFormed`.
 
 ## [0.3.0] - 2026-09-03
 
@@ -204,10 +299,12 @@ request whose target a caller can choose.
 - Hardened XML pipeline: DOCTYPE/entity refusal, no entity processing, bounded
   response bodies, control-character stripping, credential redaction.
 
+[0.3.1]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.3.1
 [0.3.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.2.0
+[0.1.3]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.3
 [0.1.2]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.1
-[0.1.0]: https://github.com/ni-c/calibreweb-mcp/releases/tag/v0.1.0
+[0.1.0]: https://github.com/ni-c/calibreweb-mcp/commit/977ef347
 
 <!-- #endregion changelog -->

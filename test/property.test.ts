@@ -17,6 +17,31 @@ import { absolutize, decodeXmlText, htmlToText } from '../src/shape.js';
 
 const RUNS = { numRuns: 500 };
 
+/**
+ * The characters `decodeXmlText` strips after decoding, so the property above
+ * can say what it expects rather than list exceptions. Built from code points:
+ * an editing tool turns a backslash-u escape in a source file into the raw
+ * byte, and a raw control character in a regular expression is what this
+ * server exists to keep out of a model's context.
+ */
+const UNSAFE_IN_OUTPUT = new RegExp(
+  `[${[
+    [0x00, 0x08],
+    [0x0b, 0x0c],
+    [0x0e, 0x1f],
+    [0x7f, 0x9f],
+    [0x200e, 0x200f],
+    [0x202a, 0x202e],
+    [0x2066, 0x2069],
+  ]
+    .map(
+      ([from, to]) =>
+        `${String.fromCodePoint(from as number)}-${String.fromCodePoint(to as number)}`
+    )
+    .join('')}]`,
+  'gu'
+);
+
 const BASE = 'https://library.example.com';
 
 describe('credential redaction', () => {
@@ -243,6 +268,72 @@ describe('markup never survives into the text', () => {
         fc.pre(!/&(#x?[0-9a-f]+|[a-z]+);/i.test(once));
         expect(decodeXmlText(once)).toBe(once);
       }),
+      RUNS
+    );
+  });
+});
+
+/**
+ * The entity decoder, over every scalar it can be asked for.
+ *
+ * `String.fromCodePoint` answers a surrogate without complaint, so the range
+ * check that refused control characters let half a character through — and the
+ * decoder is reached from any title, author or description in the library.
+ */
+describe('entity decoding answers a character or nothing', () => {
+  const scalar = fc.oneof(
+    fc.integer({ min: 0x20, max: 0x7e }),
+    fc.integer({ min: 0xa0, max: 0xd7ff }),
+    fc.integer({ min: 0xe000, max: 0x10ffff })
+  );
+
+  it('decodes a decimal reference to its own character, however padded', () => {
+    fc.assert(
+      fc.property(scalar, fc.integer({ min: 0, max: 8 }), (code, zeros) => {
+        const decoded = decodeXmlText(`&#${'0'.repeat(zeros)}${code};`);
+        const expected = String.fromCodePoint(code).replace(
+          UNSAFE_IN_OUTPUT,
+          ''
+        );
+        expect(decoded).toBe(expected);
+      }),
+      RUNS
+    );
+  });
+
+  it('never answers with half a character', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 0x10ffff }),
+        fc.boolean(),
+        (code, hex) => {
+          const reference = hex
+            ? `&#x${code.toString(16)};`
+            : `&#${String(code)};`;
+          expect(decodeXmlText(`a${reference}b`).isWellFormed()).toBe(true);
+        }
+      ),
+      RUNS
+    );
+  });
+
+  it('leaves a named reference alone unless it is one it knows', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(
+          'constructor',
+          'hasOwnProperty',
+          'toString',
+          'valueOf',
+          '__proto__',
+          'xxe'
+        ),
+        (name) => {
+          const decoded = decodeXmlText(`a&${name};b`);
+          expect(typeof decoded).toBe('string');
+          expect(decoded).toBe(`a&${name};b`);
+        }
+      ),
       RUNS
     );
   });
