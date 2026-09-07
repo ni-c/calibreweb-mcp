@@ -37,6 +37,16 @@ function shape(xml: string, offset = 0) {
   return { ...shaped, notes };
 }
 
+/**
+ * A raw control character, built at runtime rather than typed into the file.
+ *
+ * It used to sit in the string below as an actual byte — invisible in a diff,
+ * and the kind of thing an editing tool writes when it is asked for an escape.
+ * The test is about a control character surviving neither as a raw byte nor as
+ * a numeric reference, so it needs one of each; this is the raw one.
+ */
+const BELL = String.fromCharCode(7);
+
 describe('shapeFeed', () => {
   it('shapes a full book entry', () => {
     const xml = feedXml([
@@ -298,7 +308,7 @@ describe('parseContentBlob with escaped comment HTML', () => {
 describe('htmlToText / decodeXmlText', () => {
   it('strips markup, scripts and control characters', () => {
     const { text } = htmlToText(
-      '<div><script>alert(1)</script><p>Hello&nbsp;world &#27;</p></div>',
+      `<div><script>alert(1)</script><p>Hello&nbsp;${BELL}world &#27;</p></div>`,
       200
     );
     expect(text).toBe('Hello world');

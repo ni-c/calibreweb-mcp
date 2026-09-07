@@ -42,7 +42,7 @@ async function toolNames(overrides: Partial<Config> = {}): Promise<string[]> {
     client.connect(clientTransport),
   ]);
   const { tools } = await client.listTools();
-  return tools.map((t) => t.name).sort();
+  return tools.map((t) => t.name).toSorted();
 }
 
 afterEach(() => {
@@ -54,7 +54,7 @@ describe('the catalogue', () => {
   // These are what let the filter validate a name before anything is
   // registered. If they drift from the code, every error message drifts too.
   it('is exactly the set of tools the server registers', async () => {
-    expect(await toolNames()).toEqual([...ALL_TOOLS].sort());
+    expect(await toolNames()).toEqual(ALL_TOOLS.toSorted());
   });
 
   it('holds names the env-var syntax cannot misread', () => {
@@ -78,7 +78,7 @@ describe('selecting tools', () => {
   it('narrows tools/list to an allow list', async () => {
     expect(
       await toolNames({ allowTools: 'get_cover,get_shelf_books' })
-    ).toEqual(['get_cover', 'get_shelf_books'].sort());
+    ).toEqual(['get_cover', 'get_shelf_books'].toSorted());
   });
 
   it('removes a whole family with a prefix pattern', async () => {
@@ -100,18 +100,18 @@ describe('selecting tools', () => {
 
   it('selects the curated set for "essential"', async () => {
     expect(await toolNames({ allowTools: 'essential' })).toEqual(
-      [...ESSENTIAL_TOOLS].sort()
+      ESSENTIAL_TOOLS.toSorted()
     );
   });
 
   it('lets the preset compose with extra names', async () => {
     expect(await toolNames({ allowTools: 'essential,get_cover' })).toEqual(
-      [...ESSENTIAL_TOOLS, 'get_cover'].sort()
+      [...ESSENTIAL_TOOLS, 'get_cover'].toSorted()
     );
   });
 
   it('leaves an unconfigured server untouched', async () => {
-    expect(await toolNames()).toEqual([...ALL_TOOLS].sort());
+    expect(await toolNames()).toEqual(ALL_TOOLS.toSorted());
   });
 });
 

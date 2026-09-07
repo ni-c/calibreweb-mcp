@@ -29,8 +29,14 @@ const MAX_RESULT_BYTES = 400_000;
  * its serialization.
  */
 export function jsonResult(data: Record<string, unknown>): CallToolResult {
-  if (JSON.stringify(data).length <= MAX_RESULT_BYTES) {
-    return structuredResult(data);
+  // Measured as *emitted*, not as compactly as it could have been: the text
+  // block carries `JSON.stringify(data, null, 2)`, which is two to three times
+  // the characters of `JSON.stringify(data)`. Checking the compact form and
+  // sending the indented one made the ceiling a promise about a string nobody
+  // receives. Render once, measure that string, send that string.
+  const rendered = render(data);
+  if (rendered.length <= MAX_RESULT_BYTES) {
+    return structuredResult(data, rendered);
   }
 
   const stripped = JSON.parse(
@@ -40,14 +46,16 @@ export function jsonResult(data: Record<string, unknown>): CallToolResult {
         : value
     )
   ) as Record<string, unknown>;
-  if (JSON.stringify(stripped).length <= MAX_RESULT_BYTES) {
-    return structuredResult({
-      ...stripped,
-      notes: [
-        ...(Array.isArray(stripped.notes) ? stripped.notes : []),
-        `The result exceeded ${MAX_RESULT_BYTES} characters, so book summaries were dropped. Narrow the request to get them back.`,
-      ],
-    });
+  const shortened = {
+    ...stripped,
+    notes: [
+      ...(Array.isArray(stripped.notes) ? stripped.notes : []),
+      `The result exceeded ${MAX_RESULT_BYTES} characters, so book summaries were dropped. Narrow the request to get them back.`,
+    ],
+  };
+  const strippedText = render(shortened);
+  if (strippedText.length <= MAX_RESULT_BYTES) {
+    return structuredResult(shortened, strippedText);
   }
 
   // Dropping summaries is not always enough: the bulk can sit in fields the
@@ -84,12 +92,18 @@ export function untrustedResult(data: Record<string, unknown>): CallToolResult {
 /** Raised by {@link jsonResult}; `run` turns it into an error result. */
 export class ResultTooLargeError extends Error {}
 
+/** The one rendering of a result value: what the text block carries. */
+function render(data: Record<string, unknown>): string {
+  return JSON.stringify(data, null, 2);
+}
+
 /** A value in both channels, with no budget applied. */
 export function structuredResult(
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  rendered = render(data)
 ): CallToolResult {
   return {
-    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    content: [{ type: 'text', text: rendered }],
     structuredContent: data,
   };
 }
@@ -98,7 +112,17 @@ export function errorResult(text: string): CallToolResult {
   return { content: [{ type: 'text', text }], isError: true };
 }
 
-const MAX_ERROR_BODY_LENGTH = 2000;
+/**
+ * Characters of an upstream error body that reach the model.
+ *
+ * It was 2000, which is a paragraph of somebody else's prose in a context
+ * window — and the body of an error is written by whatever answered, which on
+ * a mistyped base URL is not Calibre-Web at all.
+ */
+const MAX_ERROR_BODY_LENGTH = 200;
+
+/** Built from its code point rather than typed, like everywhere else here. */
+const ELLIPSIS = String.fromCodePoint(0x2026);
 
 // Same class as shape.ts: C0/C1 controls, DEL, and BiDi override/isolate
 // characters — an upstream error body is as untrusted as feed content.
@@ -119,10 +143,15 @@ function sanitizeErrorBody(body: string): string {
   if (/^(<!doctype|<html[\s>]|<\?xml|<!--)/i.test(trimmed)) {
     return '(HTML error page omitted)';
   }
-  if (trimmed.length > MAX_ERROR_BODY_LENGTH) {
-    return `${trimmed.slice(0, MAX_ERROR_BODY_LENGTH)}… (truncated)`;
-  }
-  return trimmed;
+  if (trimmed === '') return '';
+  // Labelled, because the sentence around it is this server's and the body is
+  // not: whoever answered the request wrote it, and a model reading the two
+  // together should be able to tell them apart.
+  const shown =
+    trimmed.length > MAX_ERROR_BODY_LENGTH
+      ? `${trimmed.slice(0, MAX_ERROR_BODY_LENGTH).toWellFormed()}${ELLIPSIS} (truncated)`
+      : trimmed.toWellFormed();
+  return `(untrusted text from the instance): ${shown}`;
 }
 
 function hintFor(status: number): string {
@@ -174,8 +203,9 @@ export async function run(
       return errorResult(error.message);
     }
     if (error instanceof CalibreWebApiError) {
+      const note = error.note !== undefined ? `\n${error.note}` : '';
       return errorResult(
-        `${error.message}\n${sanitizeErrorBody(error.body)}${hintFor(error.status)}`
+        `${error.message}\n${sanitizeErrorBody(error.body)}${hintFor(error.status)}${note}`
       );
     }
     const message = error instanceof Error ? error.message : String(error);

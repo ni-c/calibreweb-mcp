@@ -100,6 +100,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .describe('Which view to list (default: new)'),
         letter: z
           .string()
+          .max(2)
           .optional()
           .describe(
             'Only with view "all": a single initial letter or digit, or "00" for every title (default: "00")'
@@ -108,6 +109,7 @@ export function registerBookTools(server: McpServer, api: CalibreWebApi): void {
           .number()
           .int()
           .min(0)
+          .max(2_147_483_647)
           .optional()
           .describe(
             'Pagination offset; use pagination.nextOffset from the previous call'

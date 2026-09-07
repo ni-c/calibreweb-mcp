@@ -30,12 +30,44 @@ const MAX_FEED_BYTES = 8 * 1024 * 1024;
  */
 const MAX_COVER_BYTES = 1 * 1024 * 1024;
 
+/**
+ * Ceiling on the JSON of `/opds/stats`, which is four counters.
+ *
+ * The feed ceiling was doing this job, and eight megabytes for four numbers is
+ * not a ceiling — it is the absence of one at the scale that matters.
+ */
+const MAX_STATS_BYTES = 64 * 1024;
+
+/**
+ * Ceiling on an error body, which is read to be quoted and nothing else.
+ *
+ * Separate from the success ceilings on purpose: this reader cuts instead of
+ * refusing, so a reverse proxy answering a 401 with a two-megabyte login page
+ * still surfaces as a 401 with a hint about the credentials.
+ */
+const MAX_ERROR_BODY_BYTES = 64 * 1024;
+
+/**
+ * How long a refused login is remembered, in milliseconds.
+ *
+ * Calibre-Web's `verify_password` writes `OPDS Login failed for user "%s"
+ * IP-address: %s` at warning level for every refusal — the line fail2ban
+ * filters on — and the rate limiter that would otherwise cap the attempts is
+ * commented out in that function, with no limiter on the OPDS routes at all.
+ * Every tool here is annotated read-only, idempotent and cheap, which is
+ * exactly what a model retries after "check your credentials". One wrong
+ * password should not become a banned address.
+ */
+const AUTH_REFUSAL_MEMORY_MS = 10_000;
+
 export class CalibreWebApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: string,
     method: string,
-    path: string
+    path: string,
+    /** Set when this answer was repeated from memory rather than requested. */
+    public readonly note?: string
   ) {
     super(`Calibre-Web ${method} ${path} failed with HTTP ${status}`);
     this.name = 'CalibreWebApiError';
@@ -87,6 +119,13 @@ export class CalibreWebApi {
    * disabling it process-wide via NODE_TLS_REJECT_UNAUTHORIZED.
    */
   private readonly insecureDispatcher?: Agent;
+  /**
+   * The last refused login, until {@link AUTH_REFUSAL_MEMORY_MS} has passed.
+   *
+   * Per process, which is the honest scope: a restart forgets it, and so does
+   * a second server instance.
+   */
+  private authRefusal: { status: number; body: string; at: number } | undefined;
 
   constructor(config: Config) {
     this.config = config;
@@ -123,6 +162,24 @@ export class CalibreWebApi {
     const missing = missingConfigKeys(this.config);
     if (missing.length > 0) {
       throw new Error(missingConfigMessage(missing));
+    }
+
+    const refusal = this.authRefusal;
+    if (refusal !== undefined) {
+      if (Date.now() - refusal.at < AUTH_REFUSAL_MEMORY_MS) {
+        throw new CalibreWebApiError(
+          refusal.status,
+          refusal.body,
+          'GET',
+          path,
+          'Repeated from memory: this login was refused less than ' +
+            `${AUTH_REFUSAL_MEMORY_MS / 1000} seconds ago and was not tried again — ` +
+            'Calibre-Web logs every refused OPDS login and does not rate-limit ' +
+            'them, so a retry loop is what gets an address banned. Next attempt ' +
+            `possible at ${new Date(refusal.at + AUTH_REFUSAL_MEMORY_MS).toISOString()}.`
+        );
+      }
+      this.authRefusal = undefined;
     }
 
     const headers: Record<string, string> = { Accept: accept };
@@ -166,21 +223,36 @@ export class CalibreWebApi {
     };
   }
 
+  /**
+   * Decides on the status before a byte of the body is read.
+   *
+   * The other order — read under the success ceiling, then look at `ok` — made
+   * a 401 behind a reverse proxy that answers with a login page report itself
+   * as "returned a response larger than 1048576 bytes and was refused": the
+   * size instead of the status, no hint about the credentials, and none of the
+   * handling that keys on 401 ever running.
+   */
+  private async expectOk(
+    path: string,
+    result: { ok: boolean; status: number; response: BodyLike }
+  ): Promise<void> {
+    if (result.ok) return;
+    const body = await readErrorBody(result.response);
+    if (result.status === 401) {
+      this.authRefusal = { status: 401, body, at: Date.now() };
+    }
+    throw new CalibreWebApiError(result.status, body, 'GET', path);
+  }
+
   /** Fetches an OPDS feed and returns the parsed XML document. */
   async getFeed(
     path: string,
     params?: Record<string, string | number | undefined>
   ): Promise<unknown> {
-    const { ok, status, response } = await this.send(
-      path,
-      'application/atom+xml',
-      params
-    );
-    const bytes = await readBoundedBody(response, path, MAX_FEED_BYTES);
+    const result = await this.send(path, 'application/atom+xml', params);
+    await this.expectOk(path, result);
+    const bytes = await readBoundedBody(result.response, path, MAX_FEED_BYTES);
     const text = bytes.toString('utf8');
-    if (!ok) {
-      throw new CalibreWebApiError(status, text, 'GET', path);
-    }
     const trimmed = text.trimStart();
     if (/^(<!doctype\s+html|<html[\s>])/i.test(trimmed)) {
       throw new Error(
@@ -201,12 +273,10 @@ export class CalibreWebApi {
 
   /** Fetches a JSON endpoint (`/opds/stats`). */
   async getJson(path: string): Promise<unknown> {
-    const { ok, status, response } = await this.send(path, 'application/json');
-    const bytes = await readBoundedBody(response, path, MAX_FEED_BYTES);
+    const result = await this.send(path, 'application/json');
+    await this.expectOk(path, result);
+    const bytes = await readBoundedBody(result.response, path, MAX_STATS_BYTES);
     const text = bytes.toString('utf8');
-    if (!ok) {
-      throw new CalibreWebApiError(status, text, 'GET', path);
-    }
     try {
       return JSON.parse(text) as unknown;
     } catch {
@@ -220,12 +290,10 @@ export class CalibreWebApi {
   async getBinary(
     path: string
   ): Promise<{ data: Buffer; contentType: string }> {
-    const { ok, status, headers, response } = await this.send(path, 'image/*');
-    const data = await readBoundedBody(response, path, MAX_COVER_BYTES);
-    if (!ok) {
-      throw new CalibreWebApiError(status, data.toString('utf8'), 'GET', path);
-    }
-    return { data, contentType: headers.get('content-type') ?? '' };
+    const result = await this.send(path, 'image/*');
+    await this.expectOk(path, result);
+    const data = await readBoundedBody(result.response, path, MAX_COVER_BYTES);
+    return { data, contentType: result.headers.get('content-type') ?? '' };
   }
 
   private isConfiguredOrigin(url: string): boolean {
@@ -234,6 +302,52 @@ export class CalibreWebApi {
     } catch {
       return false;
     }
+  }
+}
+
+/** What both readers below need of a response, and no more. */
+interface BodyLike {
+  headers: Headers;
+  body?: unknown;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+/**
+ * Reads at most {@link MAX_ERROR_BODY_BYTES} of an error body, and never
+ * throws.
+ *
+ * An error body exists to be quoted in the error message. Refusing to read it
+ * because it is large would replace a status the caller can act on with a size
+ * nobody can, which is the failure this function was written to end.
+ */
+async function readErrorBody(response: BodyLike): Promise<string> {
+  try {
+    const body = response.body;
+    if (!hasStreamingBody(body)) {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return buffer.subarray(0, MAX_ERROR_BODY_BYTES).toString('utf8');
+    }
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined) continue;
+      chunks.push(value);
+      total += value.byteLength;
+      if (total >= MAX_ERROR_BODY_BYTES) {
+        await reader.cancel();
+        break;
+      }
+    }
+    return Buffer.concat(chunks)
+      .subarray(0, MAX_ERROR_BODY_BYTES)
+      .toString('utf8');
+  } catch {
+    // A body that cannot be read is not an error worth replacing the status
+    // with; the status is the answer.
+    return '';
   }
 }
 
@@ -263,11 +377,7 @@ function hasStreamingBody(body: unknown): body is StreamingBody {
  * afterwards.
  */
 async function readBoundedBody(
-  response: {
-    headers: Headers;
-    body?: unknown;
-    arrayBuffer(): Promise<ArrayBuffer>;
-  },
+  response: BodyLike,
   path: string,
   maxBytes: number
 ): Promise<Buffer> {

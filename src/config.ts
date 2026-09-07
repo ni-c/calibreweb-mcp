@@ -101,18 +101,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   try {
     parsed = new URL(url);
   } catch {
-    // Redacted, and deliberately so: the userinfo check below only runs once the
-    // URL parses, so a value that does not parse at all but still carries
-    // credentials — "https://admin:s3cret@host:99999", an out-of-range port —
-    // would otherwise print the password into the MCP client's log file.
+    // The value that does not parse at all is the one most likely to be the
+    // secret: a password pasted one line too high fails `new URL()`, and
+    // redacting userinfo does nothing for a bare one. Quote it only when it
+    // looks like a URL at all, and describe the rest by length.
     console.error(
-      `calibreweb-mcp: CALIBRE_WEB_URL is not a valid URL: ${redactUrlCredentials(url)}`
+      `calibreweb-mcp: CALIBRE_WEB_URL is not a valid URL: ${describeValue(url)}`
     );
     process.exit(1);
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    // Not `(got ${parsed.protocol})`: a 56-character hexadecimal key with a
+    // colon after it is a valid URL whose scheme is the key, and that branch
+    // would print it in full.
     console.error(
-      `calibreweb-mcp: CALIBRE_WEB_URL must use http:// or https:// (got ${parsed.protocol})`
+      'calibreweb-mcp: CALIBRE_WEB_URL must use http:// or https://'
     );
     process.exit(1);
   }
@@ -131,14 +134,49 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  if (parsed.search !== '' || parsed.hash !== '') {
+    console.error(
+      'calibreweb-mcp: CALIBRE_WEB_URL carried a query string or fragment; ' +
+        'both were dropped — only the origin and path are used.'
+    );
+  }
+
   return {
-    url: url.replace(/\/+$/, ''),
+    // The parsed origin and path, not the environment string: a stray space,
+    // query or fragment in that string was glued in front of every request
+    // path. And the trailing slashes come off with an index walk rather than
+    // `replace(/\/+$/, '')`, which is tried from every position of the run and
+    // took 1.6 seconds on 80 000 of them.
+    url: parsed.origin + trimTrailingSlashes(parsed.pathname),
     username,
     password,
     insecureTls,
     allowTools,
     denyTools,
   };
+}
+
+/**
+ * Quotes a configuration value only when it has the shape of a URL.
+ *
+ * `redactUrlCredentials` takes the userinfo out of something that *is* a URL;
+ * it cannot help with a value that is a password, an API token or a path. Those
+ * are described by length instead, which is all a person debugging their
+ * configuration needs.
+ */
+function describeValue(value: string): string {
+  if (!value.includes('://')) {
+    return `a ${value.length}-character value that does not look like a URL`;
+  }
+  const redacted = redactUrlCredentials(value);
+  return redacted.length > 120 ? `${redacted.slice(0, 120)}...` : redacted;
+}
+
+/** Trailing `/` removed with one walk and one slice. */
+function trimTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && path.charCodeAt(end - 1) === 47) end -= 1;
+  return path.slice(0, end);
 }
 
 function isLoopbackHost(hostname: string): boolean {

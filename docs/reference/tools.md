@@ -131,6 +131,12 @@ Calibre-Web serves the full-size cover on this route; images over 1 MB are
 refused to protect the context window — use the book's `coverUrl` out-of-band
 instead. Only JPEG, PNG, GIF and WebP pass through.
 
+The reported `mimeType` is read from the image data, not from the response
+header. Calibre names every cover file `cover.jpg` whatever the image really
+is, so the header is a guess from a filename — a PNG announced as a JPEG is the
+normal case. Data that matches none of the four signatures is refused rather
+than passed on as an image.
+
 ## get_stats
 
 **essential**

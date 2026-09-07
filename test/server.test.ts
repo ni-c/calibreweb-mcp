@@ -71,7 +71,7 @@ describe('tool registration', () => {
   it('lists every tool', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual([...TOOLS].sort());
+    expect(tools.map((t) => t.name).toSorted()).toEqual(TOOLS.toSorted());
   });
 
   it('marks every tool read-only', async () => {
@@ -125,7 +125,7 @@ describe('tool registration', () => {
         return properties?.untrusted === undefined;
       })
       .map((tool) => tool.name)
-      .sort();
+      .toSorted();
     // get_stats is four counters this server checked are numbers; get_cover
     // reports an id, a media type from a four-entry allowlist and a byte
     // count. Neither carries anything a publisher wrote.
@@ -230,33 +230,31 @@ describe('search_books', () => {
   });
 });
 
-describe('list_books', () => {
-  const routeOf = async (
-    args: Record<string, unknown>
-  ): Promise<{
-    path: string;
-    query: URLSearchParams;
-    result: CallToolResult;
-  }> => {
-    const stub = stubCalibreWeb({
-      '/opds/new': { body: feedXml([bookEntryXml()]) },
-      '/opds/hot': { body: feedXml([]) },
-      '/opds/rated': { body: feedXml([]) },
-      '/opds/discover': { body: feedXml([]) },
-      '/opds/readbooks': { body: feedXml([]) },
-      '/opds/unreadbooks': { body: feedXml([]) },
-      '/opds/books/letter/D': { body: feedXml([]) },
-      '/opds/books/letter/00': { body: feedXml([]) },
-    });
-    const client = await connect();
-    const result = (await client.callTool({
-      name: 'list_books',
-      arguments: args,
-    })) as CallToolResult;
-    const call = stub.calls[0]!;
-    return { path: call.path, query: call.query, result };
-  };
+async function routeOf(args: Record<string, unknown>): Promise<{
+  path: string;
+  query: URLSearchParams;
+  result: CallToolResult;
+}> {
+  const stub = stubCalibreWeb({
+    '/opds/new': { body: feedXml([bookEntryXml()]) },
+    '/opds/hot': { body: feedXml([]) },
+    '/opds/rated': { body: feedXml([]) },
+    '/opds/discover': { body: feedXml([]) },
+    '/opds/readbooks': { body: feedXml([]) },
+    '/opds/unreadbooks': { body: feedXml([]) },
+    '/opds/books/letter/D': { body: feedXml([]) },
+    '/opds/books/letter/00': { body: feedXml([]) },
+  });
+  const client = await connect();
+  const result = (await client.callTool({
+    name: 'list_books',
+    arguments: args,
+  })) as CallToolResult;
+  const call = stub.calls[0]!;
+  return { path: call.path, query: call.query, result };
+}
 
+describe('list_books', () => {
   it('defaults to the new view', async () => {
     const { path, result } = await routeOf({});
     expect(path).toBe('/opds/new');
@@ -291,7 +289,22 @@ describe('list_books', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects a multi-character letter without fetching', async () => {
+  it('rejects a two-character letter without fetching', async () => {
+    // Two characters get past the schema's ceiling and are refused by the
+    // letter rule itself, which is the branch worth pinning: `00` is the one
+    // two-character value Calibre-Web has a route for.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const client = await connect();
+    const result = (await client.callTool({
+      name: 'list_books',
+      arguments: { view: 'all', letter: 'AB' },
+    })) as CallToolResult;
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain('invalid letter');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a long letter at the schema, without fetching', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const client = await connect();
     const result = (await client.callTool({
@@ -299,7 +312,6 @@ describe('list_books', () => {
       arguments: { view: 'all', letter: '../etc' },
     })) as CallToolResult;
     expect(result.isError).toBe(true);
-    expect(firstText(result)).toContain('invalid letter');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

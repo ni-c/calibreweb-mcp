@@ -36,8 +36,18 @@ export function registerStatsTools(
             : {};
         // Only the four documented numeric counters are passed through — the
         // endpoint answer goes into the model context verbatim otherwise.
-        const pick = (key: string): number | undefined =>
-          typeof stats[key] === 'number' ? stats[key] : undefined;
+        //
+        // `typeof === 'number'` was the whole check, and `Infinity` (which is
+        // what `1e999` in the JSON parses to) and `NaN` both pass it while
+        // `z.number()` refuses them — so one counter took the whole answer
+        // down with a validation error naming no cause. `+ 0` normalises `-0`,
+        // which the two channels would otherwise spell differently.
+        const pick = (key: string): number | undefined => {
+          const value = stats[key];
+          return typeof value === 'number' && Number.isFinite(value)
+            ? value + 0
+            : undefined;
+        };
         return jsonResult({
           books: pick('books'),
           authors: pick('authors'),
