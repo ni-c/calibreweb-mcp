@@ -214,7 +214,7 @@ export function shapeFeed(
   parsed: unknown,
   baseUrl: string,
   offset: number,
-  notes: Notes
+  warnings: Notes
 ): ShapedFeed {
   const feed = feedOf(parsed);
   const entries = feed.entry ?? [];
@@ -225,24 +225,24 @@ export function shapeFeed(
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
     if (isBookEntry(entry)) {
-      books.push(shapeBookEntry(entry, baseUrl, budget, notes));
+      books.push(shapeBookEntry(entry, baseUrl, budget, warnings));
     } else {
-      const nav = shapeNavEntry(entry, notes);
+      const nav = shapeNavEntry(entry, warnings);
       if (nav !== null) navItems.push(nav);
     }
   }
 
   if (books.length > 0 || navItems.length > 0) {
-    notes.add(UNTRUSTED_CONTENT_NOTE);
+    warnings.add(UNTRUSTED_CONTENT_NOTE);
   }
 
   const nextOffset = nextOffsetFromLinks(feed.link ?? []);
-  const pagination: Pagination = {
+  const page: Pagination = {
     offset,
     hasMore: nextOffset !== undefined,
     ...(nextOffset !== undefined ? { nextOffset } : {}),
   };
-  return { books, navItems, pagination };
+  return { books, navItems, pagination: page };
 }
 
 function isBookEntry(entry: RawEntry): boolean {
@@ -258,7 +258,7 @@ function shapeBookEntry(
   entry: RawEntry,
   baseUrl: string,
   budget: { left: number },
-  notes: Notes
+  warnings: Notes
 ): ShapedBook {
   const links = entry.link ?? [];
   const coverLink = links.find((l) => l['@_rel'] === OPDS_REL_IMAGE);
@@ -268,13 +268,13 @@ function shapeBookEntry(
 
   const id = bookIdFromLinks(links);
   if (id === null) {
-    notes.add(
+    warnings.add(
       'Some books carry no numeric id: their entries have neither a cover nor a download link, so get_cover is unavailable for them.'
     );
   }
 
   const droppedHref = (): void =>
-    notes.add(
+    warnings.add(
       'Some feed links did not resolve to the configured Calibre-Web origin (or used a non-http scheme) and were dropped.'
     );
 
@@ -315,7 +315,7 @@ function shapeBookEntry(
     budget
   );
   if (summaryTruncated) {
-    notes.add(
+    warnings.add(
       `Book summaries were truncated at ${SUMMARY_CHARS} characters (bounded overall by a ${TOTAL_SUMMARY_BUDGET}-character budget).`
     );
   }
@@ -367,7 +367,7 @@ const PUBLIC_SHELF_SUFFIX = / \(Public\)$/;
 
 function shapeNavEntry(
   entry: RawEntry,
-  notes: Notes
+  warnings: Notes
 ): { id: number | null; name: string; isPublic?: boolean } | null {
   const subsection = (entry.link ?? []).find(
     (l) => l['@_rel'] === 'subsection'
@@ -381,7 +381,7 @@ function shapeNavEntry(
   const match = /\/(\d+)\/?$/.exec(href);
   const id = match?.[1] !== undefined ? Number(match[1]) : null;
   if (id === null) {
-    notes.add(
+    warnings.add(
       'Some list entries carry no numeric id and cannot be opened with the *_books tools.'
     );
   }

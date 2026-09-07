@@ -54,7 +54,9 @@ describe('the library', () => {
 
   it('lists the books, with ids the other tools can use', async () => {
     const listed = parse<Books>(await harness.call('list_books'));
-    expect(listed.books.map((b) => b.title).sort()).toEqual([...TITLES].sort());
+    expect(listed.books.map((b) => b.title).toSorted()).toEqual(
+      TITLES.toSorted()
+    );
     // A book without an id cannot be passed to get_cover, so the id has to
     // survive the OPDS entry — which is exactly the parsing a fixture agrees
     // with by construction.
