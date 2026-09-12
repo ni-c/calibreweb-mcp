@@ -76,6 +76,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
 
+      # The base image pin and the note above it are one fact written twice,
+      # and a bump only ever rewrites one of them. This asserts the note still
+      # describes the pin, and that the major tag is still the LTS tag.
+      - run: .github/scripts/check-base-image-note.sh Dockerfile
+
   # Requires GitHub code scanning, which is unavailable while this repository is
   # private on a free plan — the job stays red until the repo goes public.
   codeql:
