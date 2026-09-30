@@ -120,31 +120,31 @@ function check(result: CallToolResult): void {
   expect(JSON.parse(text)).toEqual(result.structuredContent);
 }
 
-describe('no feed can make a tool answer without a cause', () => {
-  async function drive(
-    client: Client,
-    body: () => string
-  ): Promise<CallToolResult[]> {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const path = new URL(String(input)).pathname;
-      if (!ROUTES.includes(path)) throw new Error(`unrouted ${path}`);
-      return new Response(body(), {
-        status: 200,
-        headers: { 'content-type': 'application/atom+xml' },
-      });
+async function drive(
+  client: Client,
+  body: () => string
+): Promise<CallToolResult[]> {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = new URL(String(input)).pathname;
+    if (!ROUTES.includes(path)) throw new Error(`unrouted ${path}`);
+    return new Response(body(), {
+      status: 200,
+      headers: { 'content-type': 'application/atom+xml' },
     });
-    const results: CallToolResult[] = [];
-    for (const call of CALLS) {
-      results.push(
-        (await client.callTool({
-          name: call.name,
-          arguments: call.arguments,
-        })) as CallToolResult
-      );
-    }
-    return results;
+  });
+  const results: CallToolResult[] = [];
+  for (const call of CALLS) {
+    results.push(
+      (await client.callTool({
+        name: call.name,
+        arguments: call.arguments,
+      })) as CallToolResult
+    );
   }
+  return results;
+}
 
+describe('no feed can make a tool answer without a cause', () => {
   it('survives a feed built from hostile field values', async () => {
     const client = await connect();
     await fc.assert(
