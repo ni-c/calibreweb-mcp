@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="calibreweb-mcp">
+  <!-- Hand-written, not generated: a favicon has no source that could drift.
+       The indigo is the same #4f46e5 as the theme colour in .vitepress/config.ts,
+       and the mark reads at 16px, which rules out anything finer than this. -->
+  <rect width="32" height="32" rx="7" fill="#4f46e5" />
+  <!-- A shelf of spines, not a single volume: this server reads a whole library.
+       Deliberately unlike audiobookshelf-mcp's open book, which is an outline. -->
+  <rect x="7.4" y="7.4" width="4.2" height="16.2" rx="1.3" fill="#ffffff" />
+  <rect x="12.9" y="10.2" width="4.2" height="13.4" rx="1.3" fill="#ffffff" />
+  <rect x="18.4" y="9.4" width="4.2" height="14.2" rx="1.3" fill="#a5b4fc" transform="rotate(12 18.4 23.6)" />
+  <path d="M6.2 25.6h19.6" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" />
+</svg>
