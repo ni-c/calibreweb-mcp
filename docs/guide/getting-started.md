@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 22 or newer (or Docker)
+- Node.js 24 or newer (or Docker)
 - A running Calibre-Web or Calibre-Web Automated instance
 
 ## 1. Create a dedicated user
