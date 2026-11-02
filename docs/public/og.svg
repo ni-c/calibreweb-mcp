@@ -24,8 +24,6 @@
   <text class="pill-label" x="354" y="486" text-anchor="middle">read-only</text>
   <rect class="pill" x="463" y="452" width="91" height="52" rx="26" />
   <text class="pill-label" x="508.5" y="486" text-anchor="middle">MIT</text>
-  <rect class="pill" x="574" y="452" width="163" height="52" rx="26" />
-  <text class="pill-label" x="655.5" y="486" text-anchor="middle">Node ≥22</text>
 
   <text class="site" x="1184" y="486" text-anchor="end">calibreweb-mcp.ni-c.de</text>
 </svg>

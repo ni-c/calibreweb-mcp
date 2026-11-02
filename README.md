@@ -62,7 +62,7 @@ untrusted data it is.
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 24 or newer
 - A Calibre-Web instance (developed against the current
   `linuxserver/calibre-web` image; Calibre-Web Automated works the same way)
 - A Calibre-Web user for the server. The OPDS feed authenticates with the

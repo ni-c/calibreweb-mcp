@@ -57,7 +57,7 @@ CALIBRE_WEB_URL=http://127.0.0.1:8083 CALIBRE_WEB_USERNAME=admin \
 ## Expectations
 
 - **Tests.** Behaviour changes come with a test that fails without the change.
-  CI runs the test matrix on Node 22 and 24, npm audit, CodeQL and a Trivy
+  CI runs the test matrix on Node 24 and 26, npm audit, CodeQL and a Trivy
   container scan.
 - **Comments** explain constraints the code cannot show — not what the next line does.
 - **Security-sensitive areas** (config parsing, XML parsing, anything that builds a
